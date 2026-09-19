@@ -47,7 +47,10 @@ export class RemoteSession {
     this.#socket.on("message", (data, isBinary) => {
       this.#operation = this.#operation
         .then(() => this.#handleRawMessage(data, isBinary))
-        .catch((error: unknown) => this.#sendError("command_failed", String(error), true));
+        .catch((error: unknown) => {
+          console.warn(JSON.stringify({ event: "command_failed", sessionId: this.id, error: String(error) }));
+          this.#sendError("command_failed", "The browser command failed", true);
+        });
     });
     this.#socket.once("close", () => void this.close());
     this.#socket.once("error", (error) => {
@@ -108,7 +111,11 @@ export class RemoteSession {
       case "navigate":
         this.#loading = true;
         await this.#sendPageState();
-        await page.goto(message.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        try {
+          await page.goto(message.url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        } finally {
+          this.#loading = false;
+        }
         break;
       case "goBack":
         this.#historyTraversal = true;

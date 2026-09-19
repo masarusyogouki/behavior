@@ -47,7 +47,9 @@ browserDescribe("remote browser integration", () => {
   beforeAll(async () => {
     server = await startServer({ port: 0 });
     port = (server.httpServer.address() as AddressInfo).port;
-    socket = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    socket = new WebSocket(`ws://127.0.0.1:${port}/ws`, {
+      headers: { Origin: "http://localhost:5173" },
+    });
     messages = new MessageCollector(socket);
     await new Promise<void>((resolve, reject) => {
       socket.once("open", resolve);

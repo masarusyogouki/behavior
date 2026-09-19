@@ -4,14 +4,19 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 export class BrowserManager {
   readonly #contexts = new Set<BrowserContext>();
   #browser: Browser | undefined;
+  #closing = false;
 
   async start(): Promise<void> {
     if (this.#browser) return;
-    this.#browser = await chromium.launch({ headless: true });
+    this.#browser = await chromium.launch({
+      headless: true,
+      chromiumSandbox: process.platform === "linux" && process.env.CHROMIUM_SANDBOX !== "false",
+    });
     this.#browser.once("disconnected", () => {
       this.#browser = undefined;
       this.#contexts.clear();
-      console.error(JSON.stringify({ event: "browser_disconnected" }));
+      const level = this.#closing ? console.info : console.error;
+      level(JSON.stringify({ event: "browser_disconnected", expected: this.#closing }));
     });
   }
 
@@ -24,6 +29,7 @@ export class BrowserManager {
   }
 
   async close(): Promise<void> {
+    this.#closing = true;
     const contexts = [...this.#contexts];
     this.#contexts.clear();
     await Promise.allSettled(contexts.map((context) => context.close()));

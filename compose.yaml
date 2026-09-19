@@ -21,8 +21,13 @@ services:
     environment:
       PORT: "3001"
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      CHROMIUM_SANDBOX: "true"
+      MAX_SESSIONS: "4"
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
     init: true
     shm_size: 1gb
+    security_opt:
+      - seccomp=./seccomp_profile.json
     ports:
       - "127.0.0.1:3001:3001"
     volumes:
