@@ -1,18 +1,25 @@
-import { createServer } from "node:http";
+import { startServer } from "./server.js";
 
 const port = Number(process.env.PORT ?? 3001);
+const app = await startServer({ port });
+let shuttingDown = false;
 
-const server = createServer((request, response) => {
-  if (request.url === "/health") {
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ status: "ok" }));
-    return;
+async function shutdown(signal: string): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.info(JSON.stringify({ event: "shutdown", signal }));
+
+  const forceExit = setTimeout(() => process.exit(1), 10_000);
+  forceExit.unref();
+
+  try {
+    await app.close();
+    process.exitCode = 0;
+  } catch (error) {
+    console.error(JSON.stringify({ event: "shutdown_failed", error: String(error) }));
+    process.exitCode = 1;
   }
+}
 
-  response.writeHead(404, { "content-type": "application/json" });
-  response.end(JSON.stringify({ error: "not_found" }));
-});
-
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Backend listening on http://0.0.0.0:${port}`);
-});
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
