@@ -139,8 +139,21 @@ export class RemoteSession {
         await page.evaluate("window.stop()");
         this.#loading = false;
         break;
-      default:
-        this.#sendError("unsupported_command", "Input forwarding is not available yet", true);
+      case "click":
+        await page.mouse.click(message.x, message.y, { button: message.button });
+        break;
+      case "insertText":
+        await page.keyboard.insertText(message.text);
+        break;
+      case "pressKey": {
+        const shortcut = [...message.modifiers, message.key].join("+");
+        await page.keyboard.press(shortcut);
+        break;
+      }
+      case "scroll":
+        await page.mouse.move(message.x, message.y);
+        await page.mouse.wheel(message.deltaX, message.deltaY);
+        break;
     }
     await this.#sendPageState();
   }

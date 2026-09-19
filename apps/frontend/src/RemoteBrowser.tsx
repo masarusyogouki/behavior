@@ -1,5 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CompositionEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type WheelEvent,
+} from "react";
 import { CanvasFrameRenderer } from "./frame-renderer";
+import { keyboardModifiers, shouldForwardKey, toViewportPoint } from "./input";
 import { useRemoteBrowser } from "./use-remote-browser";
 
 const statusLabels = {
@@ -11,7 +22,9 @@ const statusLabels = {
 
 export function RemoteBrowser() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const keyboardInputRef = useRef<HTMLTextAreaElement>(null);
   const rendererRef = useRef<CanvasFrameRenderer | undefined>(undefined);
+  const composingRef = useRef(false);
   const [address, setAddress] = useState("https://example.com");
   const onFrame = useCallback((frame: ArrayBuffer) => rendererRef.current?.push(frame), []);
   const { status, pageState, error, viewport, send } = useRemoteBrowser(onFrame);
@@ -43,6 +56,43 @@ export function RemoteBrowser() {
     if (url) send({ type: "navigate", url });
   };
 
+  const pointFromEvent = (clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    return canvas ? toViewportPoint(canvas.getBoundingClientRect(), clientX, clientY, viewport) : undefined;
+  };
+
+  const handleMouseDown = (event: MouseEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const point = pointFromEvent(event.clientX, event.clientY);
+    const button = event.button === 1 ? "middle" : event.button === 2 ? "right" : "left";
+    if (point) send({ type: "click", ...point, button });
+    keyboardInputRef.current?.focus({ preventScroll: true });
+  };
+
+  const handleWheel = (event: WheelEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const point = pointFromEvent(event.clientX, event.clientY);
+    if (point) send({ type: "scroll", ...point, deltaX: event.deltaX, deltaY: event.deltaY });
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (composingRef.current || !shouldForwardKey(event.nativeEvent)) return;
+    event.preventDefault();
+    send({ type: "pressKey", key: event.key, modifiers: keyboardModifiers(event.nativeEvent) });
+  };
+
+  const handleBeforeInput = (event: FormEvent<HTMLTextAreaElement>) => {
+    const inputEvent = event.nativeEvent as InputEvent;
+    if (composingRef.current || !inputEvent.data) return;
+    event.preventDefault();
+    send({ type: "insertText", text: inputEvent.data });
+  };
+
+  const handleCompositionEnd = (event: CompositionEvent<HTMLTextAreaElement>) => {
+    composingRef.current = false;
+    if (event.data) send({ type: "insertText", text: event.data });
+  };
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -62,7 +112,26 @@ export function RemoteBrowser() {
           </form>
         </div>
         <div className="viewport-shell">
-          <canvas ref={canvasRef} width={viewport.width} height={viewport.height} aria-label="Chromium screen" />
+          <canvas
+            ref={canvasRef}
+            width={viewport.width}
+            height={viewport.height}
+            aria-label="Chromium screen"
+            onMouseDown={handleMouseDown}
+            onContextMenu={(event) => event.preventDefault()}
+            onWheel={handleWheel}
+          />
+          <textarea
+            ref={keyboardInputRef}
+            className="remote-keyboard-input"
+            aria-label="Remote keyboard input"
+            value=""
+            onChange={() => undefined}
+            onBeforeInput={handleBeforeInput}
+            onKeyDown={handleKeyDown}
+            onCompositionStart={() => { composingRef.current = true; }}
+            onCompositionEnd={handleCompositionEnd}
+          />
           {!connected && <div className="viewport-overlay">{statusLabels[status]}</div>}
         </div>
       </section>

@@ -29,6 +29,8 @@ h1 { margin: 0; font-size: clamp(22px, 4vw, 34px); line-height: 1.2; }
 .address button { padding: 0 18px; background: #3538cd; border-color: #3538cd; color: #fff; }
 .viewport-shell { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #111318; }
 .viewport-shell canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+.viewport-shell canvas { cursor: default; }
+.remote-keyboard-input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .viewport-overlay { position: absolute; inset: 0; display: grid; place-items: center; color: #d0d5dd; background: rgb(17 19 24 / 74%); font-size: 14px; letter-spacing: 0.06em; }
 .error-banner { margin: 14px 0 0; border: 1px solid #fda29b; border-radius: 10px; background: #fef3f2; padding: 11px 14px; color: #b42318; }
 footer { padding: 13px 3px 0; color: #667085; font-size: 12px; text-align: right; }
