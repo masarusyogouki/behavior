@@ -1,0 +1,43 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    environment:
+      VITE_WS_URL: ws://localhost:3001/ws
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - .:/workspace
+      - frontend_node_modules:/workspace/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    environment:
+      PORT: "3001"
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    init: true
+    shm_size: 1gb
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - .:/workspace
+      - backend_node_modules:/workspace/node_modules
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3001/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  frontend_node_modules:
+  backend_node_modules:
