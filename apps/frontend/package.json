@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "dev": "vite --host 0.0.0.0 --configLoader runner",
+    "build": "tsc -b && vite build --configLoader runner",
     "typecheck": "tsc -b --pretty false",
     "lint": "eslint src",
     "test": "vitest run --config vitest.config.ts --configLoader runner --passWithNoTests"

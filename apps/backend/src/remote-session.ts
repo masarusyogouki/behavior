@@ -8,12 +8,14 @@ import {
 } from "@behavior/protocol";
 import type { BrowserContext, Page } from "playwright";
 import { WebSocket } from "ws";
+import { FrameStreamer } from "./frame-streamer.js";
 
 export class RemoteSession {
   readonly id = randomUUID();
   readonly #context: BrowserContext;
   readonly #socket: WebSocket;
   #page: Page | undefined;
+  #frameStreamer: FrameStreamer | undefined;
   #closed = false;
   #loading = false;
   #history: string[] = [];
@@ -29,6 +31,7 @@ export class RemoteSession {
   async start(): Promise<void> {
     const page = await this.#context.newPage();
     this.#page = page;
+    this.#frameStreamer = new FrameStreamer(page, this.#socket);
     page.on("load", () => {
       this.#loading = false;
       void this.#sendPageState();
@@ -53,11 +56,13 @@ export class RemoteSession {
 
     this.#send({ type: "sessionReady", viewport: VIEWPORT });
     await this.#sendPageState();
+    await this.#frameStreamer.start();
   }
 
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
+    await this.#frameStreamer?.stop();
     await this.#context.close().catch(() => undefined);
     if (this.#socket.readyState === WebSocket.OPEN || this.#socket.readyState === WebSocket.CONNECTING) {
       this.#socket.close();
