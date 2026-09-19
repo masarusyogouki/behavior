@@ -12,7 +12,8 @@
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
-    "test": "pnpm -r --if-present test"
+    "test": "pnpm -r --if-present test",
+    "test:integration": "pnpm --filter @behavior/backend test:integration"
   },
   "devDependencies": {
     "@eslint/js": "9.35.0",

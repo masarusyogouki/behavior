@@ -3,6 +3,7 @@ import { MAX_JSON_MESSAGE_BYTES } from "@behavior/protocol";
 import { WebSocketServer } from "ws";
 import { BrowserManager } from "./browser-manager.js";
 import { RemoteSession } from "./remote-session.js";
+import { interactionFixtureHtml } from "./test-fixture.js";
 
 export type RunningServer = { close: () => Promise<void>; httpServer: HttpServer };
 
@@ -15,6 +16,11 @@ export async function startServer({ port }: { port: number }): Promise<RunningSe
     if (request.url === "/health") {
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+    if (request.url === "/__test__/interaction" && process.env.NODE_ENV !== "production") {
+      response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      response.end(interactionFixtureHtml);
       return;
     }
     response.writeHead(404, { "content-type": "application/json" });
