@@ -21,17 +21,28 @@ export class CanvasFrameRenderer {
 
   async #renderLatest(): Promise<void> {
     this.#rendering = true;
-    while (!this.#disposed && this.#pendingFrame) {
-      const frame = this.#pendingFrame;
-      this.#pendingFrame = undefined;
-      const bitmap = await createImageBitmap(new Blob([frame], { type: "image/jpeg" }));
-      try {
-        if (this.#disposed) return;
-        this.#canvas.getContext("2d")?.drawImage(bitmap, 0, 0, this.#canvas.width, this.#canvas.height);
-      } finally {
-        bitmap.close();
+    try {
+      while (!this.#disposed && this.#pendingFrame) {
+        const frame = this.#pendingFrame;
+        this.#pendingFrame = undefined;
+        try {
+          const bitmap = await createImageBitmap(new Blob([frame], { type: "image/jpeg" }));
+          try {
+            if (!this.#disposed) {
+              this.#canvas
+                .getContext("2d")
+                ?.drawImage(bitmap, 0, 0, this.#canvas.width, this.#canvas.height);
+            }
+          } finally {
+            bitmap.close();
+          }
+        } catch {
+          // A malformed or interrupted frame is dropped; the next frame remains usable.
+        }
       }
+    } finally {
+      this.#rendering = false;
+      if (!this.#disposed && this.#pendingFrame) void this.#renderLatest();
     }
-    this.#rendering = false;
   }
 }

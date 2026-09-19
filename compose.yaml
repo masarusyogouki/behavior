@@ -10,6 +10,8 @@ services:
     volumes:
       - .:/workspace
       - frontend_node_modules:/workspace/node_modules
+      - frontend_app_node_modules:/workspace/apps/frontend/node_modules
+      - frontend_protocol_node_modules:/workspace/packages/protocol/node_modules
     depends_on:
       backend:
         condition: service_healthy
@@ -33,6 +35,8 @@ services:
     volumes:
       - .:/workspace
       - backend_node_modules:/workspace/node_modules
+      - backend_app_node_modules:/workspace/apps/backend/node_modules
+      - backend_protocol_node_modules:/workspace/packages/protocol/node_modules
     healthcheck:
       test:
         - CMD
@@ -45,4 +49,8 @@ services:
 
 volumes:
   frontend_node_modules:
+  frontend_app_node_modules:
+  frontend_protocol_node_modules:
   backend_node_modules:
+  backend_app_node_modules:
+  backend_protocol_node_modules:
