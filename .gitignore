@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.vite/
+playwright-report/
+test-results/
+*.tsbuildinfo
+package-lock.json
+npm-debug.log*
+.env
+.env.local
+.tools/
