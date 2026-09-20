@@ -3,10 +3,15 @@ FROM node:24-bookworm-slim
 ENV PNPM_HOME=/opt/pnpm
 ENV PATH="${PNPM_HOME}/bin:${PNPM_HOME}:${PATH}"
 
+WORKDIR /app
+COPY package.json ./
+
 RUN corepack enable \
     && corepack prepare pnpm@11.8.0 --activate \
-    && pnpm add -g playwright@1.63.0 \
-    && playwright install --with-deps chromium
+    && pnpm install --prod --no-frozen-lockfile \
+    && pnpm exec playwright install --with-deps chromium
+
+COPY server.ts ./
 
 EXPOSE 3000
-CMD ["playwright", "run-server", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["node", "server.ts"]
