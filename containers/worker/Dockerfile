@@ -6,7 +6,10 @@ ENV PATH="${PNPM_HOME}/bin:${PNPM_HOME}:${PATH}"
 WORKDIR /app
 COPY worker/package.json ./
 
-RUN corepack enable \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable \
     && corepack prepare pnpm@11.8.0 --activate \
     && pnpm install --prod --no-frozen-lockfile \
     && pnpm exec playwright install --with-deps chromium

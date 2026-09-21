@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent, PointerEvent } from 'react'
+import type { ClipboardEvent, CompositionEvent, FormEvent, KeyboardEvent, PointerEvent } from 'react'
 import './App.css'
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
@@ -16,6 +16,8 @@ function canvasPoint(canvas: HTMLCanvasElement, clientX: number, clientY: number
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const composingRef = useRef(false)
   const socketRef = useRef<WebSocket | null>(null)
   const pressedButtonRef = useRef<MouseButton | null>(null)
   const lastPointerMoveRef = useRef(0)
@@ -141,6 +143,8 @@ function App() {
     const ws = socketRef.current
     socketRef.current = null
     pressedButtonRef.current = null
+    composingRef.current = false
+    if (inputRef.current) inputRef.current.value = ''
     ws?.close()
     clearScreen()
     setStatus('disconnected')
@@ -151,7 +155,15 @@ function App() {
   const pointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!['0', '1', '2'].includes(String(event.button))) return
     event.preventDefault()
-    event.currentTarget.focus()
+    const input = inputRef.current
+    if (input) {
+      const screen = input.parentElement?.getBoundingClientRect()
+      if (screen) {
+        input.style.left = `${event.clientX - screen.left}px`
+        input.style.top = `${event.clientY - screen.top}px`
+      }
+      input.focus()
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     const button: MouseButton = event.button === 1 ? 'middle' : event.button === 2 ? 'right' : 'left'
     pressedButtonRef.current = button
@@ -174,8 +186,10 @@ function App() {
     }
   }
 
-  const keyScreen = (event: KeyboardEvent<HTMLCanvasElement>) => {
-    if (event.isComposing || event.key === 'Process' || event.key === 'Dead') return
+  const keyScreen = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing || composingRef.current || event.nativeEvent.keyCode === 229 || event.key === 'Process' || event.key === 'Dead') return
+    if ((event.ctrlKey || event.metaKey) && event.code === 'KeyV') return
+    if (['Convert', 'NonConvert', 'KanaMode', 'Lang1', 'Lang2'].includes(event.code)) return
     event.preventDefault()
     if (['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) return
     const key = event.code || (event.key === ' ' ? 'Space' : event.key)
@@ -186,6 +200,37 @@ function App() {
       event.shiftKey && 'Shift',
     ].filter(Boolean)
     sendCommand({ type: 'key', key: [...modifiers, key].join('+') })
+  }
+
+  const sendText = (text: string) => {
+    let chunk = ''
+    for (const character of text) {
+      if (chunk.length + character.length > 1000) {
+        sendCommand({ type: 'text', text: chunk })
+        chunk = ''
+      }
+      chunk += character
+    }
+    if (chunk) sendCommand({ type: 'text', text: chunk })
+  }
+
+  const commitInput = (input: HTMLTextAreaElement) => {
+    if (composingRef.current || !input.value) return
+    sendText(input.value)
+    input.value = ''
+  }
+
+  const compositionEnd = (event: CompositionEvent<HTMLTextAreaElement>) => {
+    composingRef.current = false
+    // IME によっては確定後の input イベントが発生しない。
+    const input = event.currentTarget
+    window.setTimeout(() => commitInput(input), 0)
+  }
+
+  const pasteInput = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault()
+    const text = event.clipboardData.getData('text/plain')
+    if (text) sendText(text)
   }
 
   const navigate = (event: FormEvent<HTMLFormElement>) => {
@@ -255,7 +300,7 @@ function App() {
             ref={canvasRef}
             width={1280}
             height={720}
-            tabIndex={connected ? 0 : -1}
+            tabIndex={-1}
             aria-label="ブラウザー画面"
             onPointerDown={pointerDown}
             onPointerMove={pointerMove}
@@ -263,7 +308,20 @@ function App() {
             onPointerCancel={pointerUp}
             onAuxClick={(event) => event.preventDefault()}
             onContextMenu={(event) => event.preventDefault()}
+          />
+          <textarea
+            ref={inputRef}
+            className="viewer-keyboard-input"
+            aria-label="ブラウザー画面への文字入力"
+            tabIndex={connected ? 0 : -1}
+            autoCapitalize="off"
+            autoComplete="off"
+            spellCheck={false}
             onKeyDown={keyScreen}
+            onCompositionStart={() => { composingRef.current = true }}
+            onCompositionEnd={compositionEnd}
+            onInput={(event) => commitInput(event.currentTarget)}
+            onPaste={pasteInput}
           />
           {!connected && (
             <div className="viewer-placeholder">

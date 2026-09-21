@@ -32,7 +32,7 @@ export class PlaywrightSession {
     }
     this.browser = browser
 
-    const context = await browser.newContext({ viewport: config.viewport })
+    const context = await browser.newContext({ viewport: config.viewport, locale: 'ja-JP' })
     if (this.closed) {
       await context.close()
       return

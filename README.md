@@ -15,7 +15,7 @@ MagicPod のように、ブラウザ上でテストを作成・実行できる�
 ## ブラウザの方針
 
 MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge、Firefox などをすべて対象にするとイメージサイズと検証範囲が増えるため、必要になった段階で対応ブラウザを追加する。
-まだ日本語未対応なので日本語対応させたい
+画面内をクリックしてフォーカスすると、日本語 IME の変換確定文字列を Chromium に送れます。Worker イメージには日本語表示用フォントを含め、ブラウザーのロケールを `ja-JP` に設定します。
 
 ## Worker 内の役割
 
@@ -29,3 +29,5 @@ MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge�
 | [`config.ts`](worker/config.ts) | FPS、JPEG 品質、許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
 
 受信した操作は `server.ts` → `protocol.ts` → `playwright/session.ts` の順に渡します。画面画像と通知はセッションから `server.ts` を通して UI に返します。Playwright に固有の操作は `playwright/session.ts` に置きます。
+
+FPSを60に設定すると、ブラウザを起動して接続するだけで、CPUを約1コア分使用することが分かりました。
