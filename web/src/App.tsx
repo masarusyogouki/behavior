@@ -71,7 +71,24 @@ function App() {
   const connect = () => {
     if (socketRef.current) return
 
-    const ws = new WebSocket('ws://127.0.0.1:3000')
+    const workerUrl = import.meta.env.VITE_WORKER_WS_URL
+      || (['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'ws://127.0.0.1:3000' : '')
+    if (!workerUrl) {
+      setNotice('接続先が未設定です。VITE_WORKER_WS_URL を設定してください。')
+      return
+    }
+    if (window.location.protocol === 'https:' && !workerUrl.startsWith('wss://')) {
+      setNotice('HTTPS では wss:// の接続先を設定してください。')
+      return
+    }
+
+    let ws: WebSocket
+    try {
+      ws = new WebSocket(workerUrl)
+    } catch {
+      setNotice('WebSocket の接続先 URL が無効です。')
+      return
+    }
     socketRef.current = ws
     ws.binaryType = 'blob'
     let isDrawing = false

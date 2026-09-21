@@ -38,7 +38,7 @@ function allowedOrigins(): Set<string> {
 
 export const config = {
   host: '0.0.0.0',
-  port: 3000,
+  port: envInteger('PORT', 3000, 1, 65535),
   // UI の描画領域とポインター座標にも同じサイズを使う。
   viewport: { width: 1280, height: 720 },
   fps: envInteger('WORKER_FPS', 30, 1, 60),

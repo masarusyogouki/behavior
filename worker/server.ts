@@ -1,10 +1,20 @@
+import { createServer } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
 import { config } from './config.ts'
 import { PlaywrightSession } from './playwright/session.ts'
 import { parseCommand } from './protocol.ts'
 import type { WorkerMessage } from './protocol.ts'
 
-const wss = new WebSocketServer({ host: config.host, port: config.port })
+const server = createServer((request, response) => {
+  if (request.url === '/health') {
+    response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
+    response.end('ok')
+    return
+  }
+  response.writeHead(404)
+  response.end()
+})
+const wss = new WebSocketServer({ server })
 
 wss.on('connection', (ws: WebSocket, request) => {
   // ブラウザーからの接続元を許可リストと照合する。
@@ -81,6 +91,6 @@ wss.on('connection', (ws: WebSocket, request) => {
   })
 })
 
-wss.on('listening', () => {
+server.listen(config.port, config.host, () => {
   console.log(`スクリーンショット配信サーバー起動: ws://${config.host}:${config.port}`)
 })

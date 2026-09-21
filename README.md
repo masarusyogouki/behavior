@@ -17,6 +17,16 @@ MagicPod のように、ブラウザ上でテストを作成・実行できる�
 MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge、Firefox などをすべて対象にするとイメージサイズと検証範囲が増えるため、必要になった段階で対応ブラウザを追加する。
 画面内をクリックしてフォーカスすると、日本語 IME の変換確定文字列を Chromium に送れます。Worker イメージには日本語表示用フォントを含め、ブラウザーのロケールを `ja-JP` に設定します。
 
+## ビルドと配置
+
+設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、`WORKER_FPS`、JPEG 品質、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env` にコピーすると、フロントエンドの `VITE_WORKER_WS_URL` を設定できます。Vite は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に `VITE_WORKER_WS_URL` を書いても反映されません。
+
+Worker はヘッドレス Chromium を使うため、Docker ビルドでは Playwright の `--only-shell` を指定しています。ブラウザー本体の追加ダウンロードを省き、アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
+
+フロントエンドは `web` を Vercel などに配置できます。公開環境では `VITE_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+
+現在の Worker は接続ごとに Chromium を起動して WebSocket を維持します。Vercel Functions の WebSocket 対応だけで、この Dockerfile をそのまま Vercel に配置できるわけではありません。Worker を Vercel に配置する場合は、Vercel のコンテナ起動方式、Function の実行時間、Chromium の実行可否を別途検証してください。公開 Worker の Origin チェックは認証ではないため、インターネットに公開する前に認証とアクセス制御も必要です。
+
 ## Worker 内の役割
 
 `worker` は UI と WebSocket で通信し、接続ごとに Playwright のブラウザーセッションを作ります。現在の実装は次のファイルに分かれています。

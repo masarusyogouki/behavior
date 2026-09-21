@@ -1,2 +1,4 @@
 /.pnpm-store/
 /.env
+/web/.env
+/web/.env.local
