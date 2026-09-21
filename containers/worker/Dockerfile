@@ -11,7 +11,8 @@ RUN corepack enable \
     && pnpm install --prod --no-frozen-lockfile \
     && pnpm exec playwright install --with-deps chromium
 
-COPY worker/server.ts ./
+COPY worker/*.ts ./
+COPY worker/playwright/ ./playwright/
 
 EXPOSE 3000
 CMD ["node", "server.ts"]

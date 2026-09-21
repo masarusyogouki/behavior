@@ -1,46 +1,40 @@
-import { chromium } from 'playwright'
-import type { Browser, BrowserContext, Page } from 'playwright'
 import { WebSocket, WebSocketServer } from 'ws'
+import { config } from './config.ts'
+import { PlaywrightSession } from './playwright/session.ts'
+import { parseCommand } from './protocol.ts'
+import type { WorkerMessage } from './protocol.ts'
 
-function envInteger(name: string, fallback: number, min: number, max: number): number {
-  const raw = process.env[name]
-  if (raw === undefined || raw === '') return fallback
-  const value = Number(raw)
-  if (!Number.isInteger(value) || value < min || value > max) {
-    throw new Error(`${name} must be an integer between ${min} and ${max}`)
-  }
-  return value
-}
-
-const FPS = envInteger('WORKER_FPS', 30, 1, 60)
-const JPEG_QUALITY = envInteger('WORKER_JPEG_QUALITY', 60, 1, 100)
-const INTERVAL_MS = 1000 / FPS
-const wss = new WebSocketServer({ host: '0.0.0.0', port: 3000 })
-type MouseButton = 'left' | 'middle' | 'right'
-
-function isPoint(value: Record<string, unknown>): value is Record<string, unknown> & { x: number; y: number } {
-  return typeof value.x === 'number' && Number.isFinite(value.x)
-    && typeof value.y === 'number' && Number.isFinite(value.y)
-    && value.x >= 0 && value.x < 1280 && value.y >= 0 && value.y < 720
-}
+const wss = new WebSocketServer({ host: config.host, port: config.port })
 
 wss.on('connection', (ws: WebSocket, request) => {
-  if (!/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(request.headers.origin ?? '')) {
+  // ブラウザーからの接続元を許可リストと照合する。
+  const origin = request.headers.origin
+  if (!origin || !config.allowedOrigins.has(origin)) {
     ws.close(1008, 'Origin not allowed')
     return
   }
 
   console.log('クライアントが接続しました')
 
-  let browser: Browser | undefined
-  let context: BrowserContext | undefined
-  let page: Page | undefined
-  let interval: ReturnType<typeof setInterval> | undefined
-  let isCapturing = false
   let disconnected = false
-  let actions = Promise.resolve()
   let waitingForPong = false
+  // マウスやキーボード操作は受信順に実行する。
+  let actions = Promise.resolve()
 
+  const sendMessage = (message: WorkerMessage) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message))
+  }
+
+  const session = new PlaywrightSession({
+    sendMessage,
+    sendFrame: (frame) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(frame)
+    },
+    // 前の画像が送信待ちなら次の撮影を見送る。
+    canSendFrame: () => ws.readyState === WebSocket.OPEN && ws.bufferedAmount === 0,
+  })
+
+  // 応答しない接続を検出し、セッションを残さないようにする。
   const heartbeat = setInterval(() => {
     if (ws.readyState !== WebSocket.OPEN) return
     if (waitingForPong) {
@@ -53,151 +47,40 @@ wss.on('connection', (ws: WebSocket, request) => {
     } catch {
       ws.terminate()
     }
-  }, 15_000)
+  }, config.heartbeatMs)
 
   ws.on('pong', () => { waitingForPong = false })
   ws.on('error', (error) => {
     console.error('WebSocket エラー:', error)
     ws.terminate()
   })
-
-  const sendJson = (message: Record<string, string>) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message))
-  }
-
-  const closeSession = async () => {
-    const activeContext = context
-    const activeBrowser = browser
-    context = undefined
-    browser = undefined
-
-    try {
-      await activeContext?.close()
-    } catch (error) {
-      console.error('コンテキスト終了エラー:', error)
-    }
-    try {
-      await activeBrowser?.close()
-    } catch (error) {
-      console.error('ブラウザー終了エラー:', error)
-    }
-  }
-
   ws.on('message', (data, isBinary) => {
     if (isBinary || disconnected) return
 
     actions = actions.then(async () => {
-      const activePage = page
-      if (disconnected || !activePage || activePage.isClosed()) return
-      const message = JSON.parse(data.toString()) as Record<string, unknown>
-
-      switch (message.type) {
-        case 'move':
-          if (isPoint(message)) {
-            await activePage.mouse.move(message.x, message.y)
-          }
-          break
-        case 'down':
-        case 'up':
-          if (isPoint(message) && ['left', 'middle', 'right'].includes(String(message.button))) {
-            await activePage.mouse.move(message.x, message.y)
-            if (message.type === 'down') {
-              await activePage.mouse.down({ button: message.button as MouseButton })
-            } else {
-              await activePage.mouse.up({ button: message.button as MouseButton })
-            }
-          }
-          break
-        case 'wheel':
-          if (isPoint(message) && typeof message.deltaX === 'number' && Number.isFinite(message.deltaX)
-            && typeof message.deltaY === 'number' && Number.isFinite(message.deltaY)) {
-            await activePage.mouse.move(message.x, message.y)
-            await activePage.mouse.wheel(message.deltaX, message.deltaY)
-          }
-          break
-        case 'key':
-          if (typeof message.key === 'string' && message.key.length <= 100) {
-            await activePage.keyboard.press(message.key)
-          }
-          break
-        case 'text':
-          if (typeof message.text === 'string' && message.text.length <= 1000) {
-            await activePage.keyboard.insertText(message.text)
-          }
-          break
-        case 'navigate':
-          if (typeof message.url === 'string') {
-            const input = message.url.trim()
-            if (!input) break
-            const url = new URL(input.includes('://') ? input : `https://${input}`)
-            if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('http または https の URL を指定してください')
-            await activePage.goto(url.href, { waitUntil: 'domcontentloaded' })
-          }
-          break
-        case 'back':
-          await activePage.goBack({ waitUntil: 'domcontentloaded' })
-          break
-        case 'forward':
-          await activePage.goForward({ waitUntil: 'domcontentloaded' })
-          break
-        case 'reload':
-          await activePage.reload({ waitUntil: 'domcontentloaded' })
-          break
-      }
+      if (disconnected) return
+      const command = parseCommand(data.toString(), config.viewport.width, config.viewport.height)
+      if (command) await session.execute(command)
     }).catch((error: unknown) => {
       console.error('操作エラー:', error)
-      sendJson({ type: 'error', message: error instanceof Error ? error.message : '操作に失敗しました' })
+      sendMessage({ type: 'error', message: error instanceof Error ? error.message : '操作に失敗しました' })
     })
   })
-
   ws.on('close', () => {
     disconnected = true
     clearInterval(heartbeat)
-    if (interval) clearInterval(interval)
-    void closeSession()
+    void session.close()
     console.log('クライアントが切断されました')
   })
 
-  void (async () => {
-    try {
-      const activeBrowser = await chromium.launch({ headless: true })
-      browser = activeBrowser
-      if (disconnected) {
-        await closeSession()
-        return
-      }
-
-      const activeContext = await activeBrowser.newContext({ viewport: { width: 1280, height: 720 } })
-      context = activeContext
-      if (disconnected) {
-        await closeSession()
-        return
-      }
-
-      const activePage = await activeContext.newPage()
-      page = activePage
-      activePage.on('framenavigated', (frame) => {
-        if (frame === activePage.mainFrame()) sendJson({ type: 'url', url: frame.url() })
-      })
-      await activePage.goto('https://en.wikipedia.org/wiki/Main_Page', { waitUntil: 'domcontentloaded' })
-      if (disconnected) return
-      sendJson({ type: 'ready', url: activePage.url(), fps: String(FPS) })
-
-      interval = setInterval(() => {
-        if (isCapturing || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 0) return
-        isCapturing = true
-
-        void activePage.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
-          .then((screenshot) => ws.send(screenshot))
-          .catch((error: unknown) => console.error('キャプチャエラー:', error))
-          .finally(() => { isCapturing = false })
-      }, INTERVAL_MS)
-    } catch (error) {
-      console.error('ブラウザーの起動またはページの読み込みに失敗しました:', error)
-      ws.close()
-      await closeSession()
-    }
-  })()
+  void session.start().catch((error: unknown) => {
+    if (disconnected) return
+    console.error('ブラウザーの起動またはページの読み込みに失敗しました:', error)
+    ws.close()
+    void session.close()
+  })
 })
 
-console.log('スクリーンショット配信サーバー起動: ws://0.0.0.0:3000')
+wss.on('listening', () => {
+  console.log(`スクリーンショット配信サーバー起動: ws://${config.host}:${config.port}`)
+})
