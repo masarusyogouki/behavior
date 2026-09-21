@@ -2,7 +2,18 @@ import { chromium } from 'playwright'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { WebSocket, WebSocketServer } from 'ws'
 
-const FPS = 30
+function envInteger(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name]
+  if (raw === undefined || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name} must be an integer between ${min} and ${max}`)
+  }
+  return value
+}
+
+const FPS = envInteger('WORKER_FPS', 30, 1, 60)
+const JPEG_QUALITY = envInteger('WORKER_JPEG_QUALITY', 60, 1, 100)
 const INTERVAL_MS = 1000 / FPS
 const wss = new WebSocketServer({ host: '0.0.0.0', port: 3000 })
 type MouseButton = 'left' | 'middle' | 'right'
@@ -176,7 +187,7 @@ wss.on('connection', (ws: WebSocket, request) => {
         if (isCapturing || ws.readyState !== WebSocket.OPEN || ws.bufferedAmount > 0) return
         isCapturing = true
 
-        void activePage.screenshot({ type: 'jpeg', quality: 60 })
+        void activePage.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
           .then((screenshot) => ws.send(screenshot))
           .catch((error: unknown) => console.error('キャプチャエラー:', error))
           .finally(() => { isCapturing = false })

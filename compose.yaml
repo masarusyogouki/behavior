@@ -1,7 +1,12 @@
 services:
-  playwright:
-    build: ./containers/playwright
+  worker:
+    build:
+      context: .
+      dockerfile: containers/worker/Dockerfile
     init: true
-    shm_size: 1gb
+    cpus: "${WORKER_CPUS}"
+    mem_limit: "${WORKER_MEMORY_LIMIT}"
+    shm_size: "${WORKER_SHM_SIZE}"
+    env_file: .env
     ports:
       - "127.0.0.1:3000:3000"

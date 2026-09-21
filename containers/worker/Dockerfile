@@ -4,14 +4,14 @@ ENV PNPM_HOME=/opt/pnpm
 ENV PATH="${PNPM_HOME}/bin:${PNPM_HOME}:${PATH}"
 
 WORKDIR /app
-COPY package.json ./
+COPY worker/package.json ./
 
 RUN corepack enable \
     && corepack prepare pnpm@11.8.0 --activate \
     && pnpm install --prod --no-frozen-lockfile \
     && pnpm exec playwright install --with-deps chromium
 
-COPY server.ts ./
+COPY worker/server.ts ./
 
 EXPOSE 3000
 CMD ["node", "server.ts"]
