@@ -1,6 +1,7 @@
+'use client'
+
 import { useEffect, useRef, useState } from 'react'
 import type { ClipboardEvent, CompositionEvent, FormEvent, KeyboardEvent, PointerEvent } from 'react'
-import './App.css'
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 type BrowserCommand = Record<string, string | number>
@@ -71,10 +72,10 @@ function App() {
   const connect = () => {
     if (socketRef.current) return
 
-    const workerUrl = import.meta.env.VITE_WORKER_WS_URL
+    const workerUrl = process.env.NEXT_PUBLIC_WORKER_WS_URL
       || (['localhost', '127.0.0.1'].includes(window.location.hostname) ? 'ws://127.0.0.1:3000' : '')
     if (!workerUrl) {
-      setNotice('接続先が未設定です。VITE_WORKER_WS_URL を設定してください。')
+      setNotice('接続先が未設定です。NEXT_PUBLIC_WORKER_WS_URL を設定してください。')
       return
     }
     if (window.location.protocol === 'https:' && !workerUrl.startsWith('wss://')) {

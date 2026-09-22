@@ -19,13 +19,13 @@ MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge�
 
 ## ビルドと配置
 
-設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、`WORKER_FPS`、JPEG 品質、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env` にコピーすると、フロントエンドの `VITE_WORKER_WS_URL` を設定できます。Vite は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に `VITE_WORKER_WS_URL` を書いても反映されません。
+設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、`WORKER_FPS`、JPEG 品質、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env.local` にコピーすると、フロントエンドの `NEXT_PUBLIC_WORKER_WS_URL` を設定できます。Next.js は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に書いても反映されません。
 
 Worker はヘッドレス Chromium を使うため、Docker ビルドでは Playwright の `--only-shell` を指定しています。ブラウザー本体の追加ダウンロードを省き、アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
 
-フロントエンドは `web` を Vercel などに配置できます。公開環境では `VITE_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+フロントエンドは `web` を Vercel などに配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
 
-現在の Worker は接続ごとに Chromium を起動して WebSocket を維持します。Vercel Functions の WebSocket 対応だけで、この Dockerfile をそのまま Vercel に配置できるわけではありません。Worker を Vercel に配置する場合は、Vercel のコンテナ起動方式、Function の実行時間、Chromium の実行可否を別途検証してください。公開 Worker の Origin チェックは認証ではないため、インターネットに公開する前に認証とアクセス制御も必要です。
+現在の Worker は接続ごとに Chromium を起動して WebSocket を維持します。Worker を Vercel に配置する場合は、コンテナ起動方式、実行時間、Chromium の実行可否を別途検証してください。公開 Worker の Origin チェックは認証ではないため、インターネットに公開する前に認証とアクセス制御も必要です。
 
 ## Worker 内の役割
 

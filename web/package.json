@@ -5,12 +5,13 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "next dev -p 3001",
+    "build": "next build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "start": "next start -p 3001"
   },
   "dependencies": {
+    "next": "16.3.5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
@@ -18,9 +19,7 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
-    "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
-    "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "typescript": "~6.0.2"
   }
 }

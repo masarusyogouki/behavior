@@ -24,7 +24,7 @@ function httpUrl(value: string, name: string): URL {
 function allowedOrigins(): Set<string> {
   // Origin はスキーム・ホスト・ポートだけを含む。複数指定はカンマ区切り。
   const raw = process.env.WORKER_ALLOWED_ORIGINS
-    ?? 'http://localhost:5173,http://127.0.0.1:5173'
+    ?? 'http://localhost:3001,http://127.0.0.1:3001'
   const origins = raw.split(',').map((origin) => origin.trim()).filter(Boolean)
   if (origins.length === 0) throw new Error('WORKER_ALLOWED_ORIGINS must not be empty')
   return new Set(origins.map((origin) => {
