@@ -13,12 +13,7 @@
 
 .viewer-header,
 .viewer-heading,
-.viewer-controls,
-.browser-tabs,
-.viewer-toolbar,
-.browser-navigation,
-.browser-address,
-.browser-footer {
+.viewer-controls {
   display: flex;
   align-items: center;
 }
@@ -95,8 +90,6 @@
 
 .viewer-status-connecting .viewer-status-dot { background: #e7a537; }
 .viewer-status-error .viewer-status-dot { background: #e05b5b; }
-.viewer-fps { color: #78869a; }
-
 .viewer button {
   flex: none;
   border: 1px solid #cbd4e1;
@@ -116,8 +109,7 @@
 }
 
 .viewer button:focus-visible,
-.viewer input:focus-visible,
-.viewer canvas:focus-visible {
+.vnc-screen:focus-visible {
   outline: 2px solid #3268e8;
   outline-offset: 2px;
 }
@@ -139,11 +131,13 @@
 
 .browser-window {
   display: flex;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   min-height: 0;
-  width: min(100%, 1100px, 105dvh);
-  margin: 0 auto;
+  /* 遠隔画面の 1280×720 と同じ比率を保ち、縦の短い画面にも収める。 */
+  width: min(100%, 1280px, calc((100dvh - 130px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  margin: auto;
   overflow: hidden;
   border: 1px solid #cdd5e1;
   border-radius: 14px;
@@ -151,157 +145,28 @@
   box-shadow: 0 18px 45px rgba(35, 53, 78, 0.12), 0 2px 6px rgba(35, 53, 78, 0.06);
 }
 
-.browser-tabs {
-  flex: none;
-  height: 43px;
-  gap: 17px;
-  padding: 0 15px;
-  background: #dfe4ec;
-}
-
-.browser-window-dots {
-  display: flex;
-  gap: 6px;
-}
-
-.browser-window-dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #a8b2c1;
-}
-
-.browser-tab {
-  align-self: end;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  box-sizing: border-box;
-  min-width: 0;
-  width: min(260px, 48vw);
-  height: 36px;
-  padding: 0 15px;
-  border-radius: 10px 10px 0 0;
-  background: #fff;
-  color: #3b475b;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.browser-tab-icon {
-  color: #4d7beb;
-  font-size: 17px;
-}
-
-.browser-tab-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.browser-tab-spacer { flex: 1; }
-
-.browser-session-label {
-  color: #7b899b;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.viewer-toolbar {
-  flex: none;
-  height: 52px;
-  gap: 12px;
-  padding: 0 14px;
-  border-bottom: 1px solid #e5e9ef;
-  background: #fff;
-}
-
-.browser-navigation { gap: 3px; }
-
-.browser-navigation button {
-  display: grid;
-  place-items: center;
-  width: 31px;
-  height: 31px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  font-size: 20px;
-  font-weight: 400;
-  line-height: 1;
-}
-
-.browser-address {
-  flex: 1;
-  min-width: 0;
-  height: 34px;
-  gap: 8px;
-  padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 18px;
-  background: #f0f3f7;
-}
-
-.browser-address:focus-within {
-  border-color: #86a6ee;
-  background: #fff;
-}
-
-.browser-address-icon {
-  color: #77859a;
-  font-size: 21px;
-  line-height: 1;
-}
-
-.browser-address input {
-  box-sizing: border-box;
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #344259;
-  font: inherit;
-  font-size: 13px;
-}
-
-.viewer .browser-go { padding: 7px 15px; }
-
 .viewer-screen {
   position: relative;
-  display: flex;
   flex: 1;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
   overflow: hidden;
   overscroll-behavior: contain;
   background: #edf1f6;
 }
 
-.viewer canvas {
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: 16 / 9;
-  cursor: default;
+.vnc-screen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
   touch-action: none;
 }
 
-.viewer-keyboard-input {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  resize: none;
+.viewer-input-hint {
+  flex: none;
+  width: min(100%, 1280px);
+  margin: 12px auto 0;
+  color: #526077;
+  font-size: 13px;
 }
 
 .viewer-placeholder {
@@ -330,20 +195,9 @@
   font-size: 17px;
 }
 
-.browser-footer {
-  flex: none;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 30px;
-  padding: 0 14px;
-  border-top: 1px solid #e9edf2;
-  color: #8895a7;
-  font-size: 11px;
-}
-
 .viewer-notice {
   flex: none;
-  width: min(100%, 1100px, 105dvh);
+  width: min(100%, 1280px);
   margin-inline: auto;
   margin-top: 12px;
   color: #be3e3e;
@@ -352,6 +206,7 @@
 
 @media (max-width: 700px) {
   .viewer { padding: 14px 12px; }
+  .browser-window { width: min(100%, calc((100dvh - 165px) * 16 / 9)); }
 
   .viewer-header {
     align-items: flex-start;
@@ -360,24 +215,6 @@
   }
 
   .viewer-controls { justify-content: flex-start; }
-
-  .browser-tabs {
-    gap: 10px;
-    padding: 0 10px;
-  }
-
-  .browser-session-label,
-  .browser-footer span:last-child { display: none; }
-
-  .viewer-toolbar {
-    gap: 5px;
-    padding: 0 7px;
-  }
-
-  .browser-navigation { gap: 0; }
-  .browser-navigation button { width: 26px; }
-  .browser-address { padding: 0 8px; }
-  .viewer .browser-go { padding: 7px 9px; }
 
   .viewer-placeholder {
     gap: 6px;

@@ -12,7 +12,7 @@ export type BrowserCommand =
   | { type: 'back' | 'forward' | 'reload' }
 
 export type WorkerMessage =
-  | { type: 'ready'; url: string; fps: string }
+  | { type: 'ready'; url: string; vncPath: string }
   | { type: 'url'; url: string }
   | { type: 'error'; message: string }
 

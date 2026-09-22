@@ -5,8 +5,8 @@ import type { BrowserCommand, WorkerMessage } from '../protocol.ts'
 
 type SessionOutput = {
   sendMessage(message: WorkerMessage): void
-  sendFrame(frame: Buffer): void
-  canSendFrame(): boolean
+  vncPath: string
+  environment(): NodeJS.ProcessEnv
 }
 
 export class PlaywrightSession {
@@ -14,8 +14,6 @@ export class PlaywrightSession {
   private browser?: Browser
   private context?: BrowserContext
   private page?: Page
-  private captureTimer?: ReturnType<typeof setInterval>
-  private capturing = false
   private closed = false
   private closePromise?: Promise<void>
 
@@ -25,14 +23,16 @@ export class PlaywrightSession {
 
   async start(): Promise<void> {
     // 接続が起動途中で閉じられた場合、作成済みの資源をその場で破棄する。
-    const browser = await chromium.launch({ headless: true })
+    // Chromium を VNC と同じ X display で開き、OS 側の IME を使えるようにする。
+    const browser = await chromium.launch({ headless: false, args: ['--kiosk', '--gtk-version=3', '--window-position=0,0', `--window-size=${config.viewport.width},${config.viewport.height}`], env: this.output.environment() })
     if (this.closed) {
       await browser.close()
       return
     }
     this.browser = browser
 
-    const context = await browser.newContext({ viewport: config.viewport, locale: 'ja-JP' })
+    // viewport を固定すると実際のブラウザー窓と VNC の座標がずれるため、窓のサイズを使う。
+    const context = await browser.newContext({ viewport: null, locale: 'ja-JP' })
     if (this.closed) {
       await context.close()
       return
@@ -54,8 +54,7 @@ export class PlaywrightSession {
 
     await page.goto(config.initialUrl, { waitUntil: 'domcontentloaded' })
     if (this.closed) return
-    this.output.sendMessage({ type: 'ready', url: page.url(), fps: String(config.fps) })
-    this.captureTimer = setInterval(() => { void this.captureFrame() }, 1000 / config.fps)
+    this.output.sendMessage({ type: 'ready', url: page.url(), vncPath: this.output.vncPath })
   }
 
   async execute(command: BrowserCommand): Promise<void> {
@@ -111,25 +110,8 @@ export class PlaywrightSession {
     // 切断と起動失敗の両方から呼ばれても終了処理は一度だけ行う。
     if (this.closePromise) return this.closePromise
     this.closed = true
-    if (this.captureTimer) clearInterval(this.captureTimer)
     this.closePromise = this.closeBrowser()
     return this.closePromise
-  }
-
-  private async captureFrame(): Promise<void> {
-    // 撮影を重ねず、通信が詰まっている間は古いフレームを作らない。
-    if (this.closed || this.capturing || !this.output.canSendFrame()) return
-    const page = this.page
-    if (!page || page.isClosed()) return
-    this.capturing = true
-    try {
-      const frame = await page.screenshot({ type: 'jpeg', quality: config.jpegQuality })
-      if (!this.closed && this.output.canSendFrame()) this.output.sendFrame(frame)
-    } catch (error) {
-      if (!this.closed) console.error('キャプチャエラー:', error)
-    } finally {
-      this.capturing = false
-    }
   }
 
   private async closeBrowser(): Promise<void> {

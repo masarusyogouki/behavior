@@ -1,5 +1,6 @@
 services:
   worker:
+    platform: "${WORKER_PLATFORM:-linux/amd64}"
     build:
       context: .
       dockerfile: containers/worker/Dockerfile

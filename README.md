@@ -15,13 +15,13 @@ MagicPod のように、ブラウザ上でテストを作成・実行できる�
 ## ブラウザの方針
 
 MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge、Firefox などをすべて対象にするとイメージサイズと検証範囲が増えるため、必要になった段階で対応ブラウザを追加する。
-画面内をクリックしてフォーカスすると、日本語 IME の変換確定文字列を Chromium に送れます。Worker イメージには日本語表示用フォントを含め、ブラウザーのロケールを `ja-JP` に設定します。
+画面内をクリックしてフォーカスすると、Worker 側の Fcitx5/Anthy で日本語を変換できます。変換中の文字と候補は VNC 画面に表示されます。手元の IME はオフにし、遠隔画面では `Ctrl+Space` で日本語入力を切り替えてください。Worker イメージには日本語表示用フォントを含め、ブラウザーのロケールを `ja-JP` に設定します。
 
 ## ビルドと配置
 
-設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、`WORKER_FPS`、JPEG 品質、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env.local` にコピーすると、フロントエンドの `NEXT_PUBLIC_WORKER_WS_URL` を設定できます。Next.js は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に書いても反映されません。
+設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env.local` にコピーすると、フロントエンドの `NEXT_PUBLIC_WORKER_WS_URL` を設定できます。Next.js は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に書いても反映されません。
 
-Worker はヘッドレス Chromium を使うため、Docker ビルドでは Playwright の `--only-shell` を指定しています。ブラウザー本体の追加ダウンロードを省き、アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
+Worker は Xvfb 上の Chromium を使います。Docker ビルドでは Chromium 本体、Xvfb、x11vnc をインストールします。アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。依存パッケージとブラウザーの取得内容も BuildKit のキャッシュに保持します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
 
 フロントエンドは `web` を Vercel などに配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
 
@@ -33,11 +33,37 @@ Worker はヘッドレス Chromium を使うため、Docker ビルドでは Play
 
 | ファイル | 役割 |
 | --- | --- |
-| [`server.ts`](worker/server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、切断時の終了処理。テキストの通知と JPEG 画像を UI に送る。 |
+| [`server.ts`](worker/server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
 | [`protocol.ts`](worker/protocol.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
-| [`playwright/session.ts`](worker/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、スクリーンショットの撮影、終了処理を行う。 |
-| [`config.ts`](worker/config.ts) | FPS、JPEG 品質、許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
+| [`playwright/session.ts`](worker/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
+| [`vnc/display.ts`](worker/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
+| [`config.ts`](worker/config.ts) | 許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
 
-受信した操作は `server.ts` → `protocol.ts` → `playwright/session.ts` の順に渡します。画面画像と通知はセッションから `server.ts` を通して UI に返します。Playwright に固有の操作は `playwright/session.ts` に置きます。
+画面は x11vnc → Worker の `/vnc/<一時トークン>` → noVNC の順で送ります。画面内の Chromium のタブやアドレスバー、Fcitx5/Anthy の変換候補は VNC 経由で操作・表示します。画面ごとに D-Bus と Fcitx5 を起動し、切断時に終了します。トークンは操作 WebSocket の接続ごとに発行し、切断時に破棄します。
 
-FPSを60に設定すると、ブラウザを起動して接続するだけで、CPUを約1コア分使用することが分かりました。
+以前の JPEG スクリーンショットを 60 FPS で撮影する方式では、接続するだけで CPU を約 1 コア使用していました。現在は変更領域を VNC で配信し、定期スクリーンショットは実行しません。
+
+リポジトリのルートで、まず設定ファイルを作ります。
+
+```powershell
+Copy-Item .env.example .env
+Copy-Item web/.env.example web/.env.local
+```
+
+次に、**ターミナルを2つ**使って起動します。
+
+ターミナル1（worker）:
+
+```powershell
+docker compose up --build worker
+```
+
+ターミナル2（Next.js）:
+
+```powershell
+cd web
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+`http://localhost:3001` を開き、「接続」を押してください。

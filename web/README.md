@@ -1,6 +1,6 @@
 # Web
 
-Next.js のフロントエンドです。ブラウザーから Worker の WebSocket に直接接続します。
+Next.js のフロントエンドです。ブラウザーから Worker の操作 WebSocket と VNC WebSocket に直接接続し、noVNC で画面を表示します。
 
 ## ローカル開発
 
