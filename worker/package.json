@@ -1,0 +1,14 @@
+{
+  "name": "browser-worker",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.8.0",
+  "dependencies": {
+    "playwright": "1.63.0",
+    "ws": "8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/ws": "8.18.1"
+  }
+}

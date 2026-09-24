@@ -1,0 +1,12 @@
+**
+!worker/
+!worker/package.json
+!worker/*.ts
+!worker/playwright/
+!worker/playwright/*.ts
+!worker/vnc/
+!worker/vnc/*.ts
+!containers/
+!containers/worker/
+!containers/worker/fcitx5/
+!containers/worker/fcitx5/profile
