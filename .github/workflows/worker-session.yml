@@ -1,4 +1,5 @@
 name: Worker Session
+run-name: Worker Session / ${{ inputs.mode }} / ${{ inputs.session_id || 'manual' }}
 
 on:
   workflow_dispatch:
@@ -149,6 +150,7 @@ jobs:
         with:
           name: worker-session-${{ github.run_id }}
           path: ${{ runner.temp }}/worker-session.json
+          archive: false
           if-no-files-found: error
           retention-days: 1
 
@@ -163,6 +165,14 @@ jobs:
           done
           worker_exit_code="$(docker inspect --format '{{.State.ExitCode}}' browser-worker 2>/dev/null || echo unknown)"
           tunnel_exit_code="$(docker inspect --format '{{.State.ExitCode}}' cloudflared 2>/dev/null || echo unknown)"
+          if [[ "$worker_exit_code" == "0" && "$tunnel_exit_code" == "0" ]]; then
+            echo "Worker session ended normally."
+            exit 0
+          fi
+          if [[ "$worker_exit_code" == "0" && "$(docker inspect --format '{{.State.Running}}' cloudflared 2>/dev/null || true)" == "true" ]]; then
+            echo "Worker session ended normally."
+            exit 0
+          fi
           echo "A session container stopped unexpectedly (Worker: $worker_exit_code, cloudflared: $tunnel_exit_code)."
           exit 1
 

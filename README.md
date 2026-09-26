@@ -23,9 +23,9 @@ MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge�
 
 Worker は Xvfb 上の Chromium を使います。Docker ビルドでは Chromium 本体、Xvfb、x11vnc をインストールします。アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。依存パッケージとブラウザーの取得内容も BuildKit のキャッシュに保持します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
 
-フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境ではWeb APIがGitHub Appを介してWorker workflowを起動し、Quick Tunnelの一時URLへ接続します。`NEXT_PUBLIC_WORKER_WS_URL` はlocalhostでの直接接続専用です。Worker 側の `WORKER_ALLOWED_ORIGINS` にはフロントエンドのOriginを指定します。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
 
-制御WebSocketはRS256の短期セッションJWTを必須とし、`behavior.v1` と `behavior.jwt.<JWT>` の2つのWebSocketサブプロトコルで渡します。Workerには `WORKER_SESSION_PUBLIC_KEY`、`WORKER_SESSION_ID`、`WORKER_SESSION_AUDIENCE` だけを設定し、署名用秘密鍵は渡しません。JWTは `sessionId`、`audience`、`exp`、`jti` を検証し、一度使用した `jti` を拒否します。現在はCloudflare APIによるJWT発行とWeb画面への受け渡しが未接続のため、通常のローカル画面からの接続はその工程の完了後に再開します。
+制御WebSocketはRS256の短期セッションJWTを必須とし、`behavior.v1` と `behavior.jwt.<JWT>` の2つのWebSocketサブプロトコルで渡します。Workerには `WORKER_SESSION_PUBLIC_KEY`、`WORKER_SESSION_ID`、`WORKER_SESSION_AUDIENCE` だけを設定し、署名用秘密鍵は渡しません。JWTは `sessionId`、`audience`、`exp`、`jti` を検証し、一度使用した `jti` を拒否します。GitHub App秘密鍵とセッションJWT署名鍵はCloudflare Workers Secretsだけに保存し、ブラウザーやWorkerコンテナへ渡しません。
 
 Cloudflare Workers 向けのローカル確認は `web` ディレクトリで行います。`build:vinext` が Workers 用成果物を生成し、`start:vinext` が Wrangler のローカル runtime で配信します。`dev` は従来どおり `http://localhost:3001` の Next.js 開発サーバーを起動します。
 
