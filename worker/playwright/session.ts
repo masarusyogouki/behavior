@@ -1,7 +1,9 @@
 import { chromium } from 'playwright'
+import { randomBytes } from 'node:crypto'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import { config } from '../config.ts'
 import type { BrowserCommand, WorkerMessage } from '../protocol.ts'
+import { installElementInspector, normalizeElementSnapshot } from './inspector.ts'
 
 type SessionOutput = {
   sendMessage(message: WorkerMessage): void
@@ -38,6 +40,14 @@ export class PlaywrightSession {
       return
     }
     this.context = context
+
+    const inspectorBinding = `__behaviorElementSelected_${randomBytes(12).toString('hex')}`
+    await context.exposeBinding(inspectorBinding, ({ frame }, payload: unknown) => {
+      if (this.closed) return
+      const element = normalizeElementSnapshot(payload, frame)
+      if (element) this.output.sendMessage({ type: 'element-selected', element })
+    })
+    await context.addInitScript(installElementInspector, inspectorBinding)
 
     const page = await context.newPage()
     if (this.closed) {

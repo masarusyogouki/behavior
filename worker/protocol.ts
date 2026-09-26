@@ -11,9 +11,31 @@ export type BrowserCommand =
   | { type: 'navigate'; url: string }
   | { type: 'back' | 'forward' | 'reload' }
 
+export type ElementSelector = {
+  type: 'testId' | 'id' | 'role' | 'label' | 'placeholder' | 'css'
+  value: string
+  playwright: string
+  unique: boolean
+}
+
+export type ElementSnapshot = {
+  tagName: string
+  outerHTML: string
+  outerHTMLTruncated: boolean
+  text: string
+  attributes: Array<{ name: string; value: string }>
+  selectors: ElementSelector[]
+  frame: {
+    url: string
+    name: string | null
+    isMainFrame: boolean
+  }
+}
+
 export type WorkerMessage =
   | { type: 'ready'; url: string; vncPath: string }
   | { type: 'url'; url: string }
+  | { type: 'element-selected'; element: ElementSnapshot }
   | { type: 'error'; message: string }
 
 function record(value: unknown): value is Record<string, unknown> {
