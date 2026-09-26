@@ -5,6 +5,15 @@ services:
       context: .
       dockerfile: containers/worker/Dockerfile
     init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+      - /home/worker/.cache:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=256m
+      - /home/worker/.config:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=32m
     cpus: "${WORKER_CPUS}"
     mem_limit: "${WORKER_MEMORY_LIMIT}"
     shm_size: "${WORKER_SHM_SIZE}"

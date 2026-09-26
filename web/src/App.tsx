@@ -73,7 +73,13 @@ function App() {
     socketRef.current = null
     rfbRef.current?.disconnect()
     rfbRef.current = null
-    ws?.close()
+    if (ws?.readyState === WebSocket.OPEN) {
+      // 明示切断をWorkerへ伝え、GitHub Actionsのsessionを正常終了させる。
+      ws.send(JSON.stringify({ type: 'disconnect' }))
+      window.setTimeout(() => ws.close(), 1000)
+    } else {
+      ws?.close()
+    }
     setStatus('disconnected')
     setNotice('')
   }

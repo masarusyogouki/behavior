@@ -5,6 +5,7 @@ ENV PNPM_HOME=/opt/pnpm
 ENV PATH="${PNPM_HOME}/bin:${PNPM_HOME}:${PATH}"
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV LANG=C.UTF-8
+ENV HOME=/home/worker
 
 WORKDIR /app
 
@@ -20,13 +21,18 @@ RUN --mount=type=cache,target=/opt/pnpm/store \
 RUN --mount=type=cache,target=/opt/playwright-cache \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-cache pnpm exec playwright install --with-deps --no-shell chromium \
     && apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc dbus-x11 fcitx5 fcitx5-anthy fcitx5-frontend-gtk3 \
-    && mkdir -p /ms-playwright && cp -a /opt/playwright-cache/. /ms-playwright/ \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin worker \
+    && mkdir -p /ms-playwright /etc/xdg/fcitx5 /home/worker/.cache /home/worker/.config \
+    && cp -a /opt/playwright-cache/. /ms-playwright/ \
+    && chown -R worker:worker /home/worker \
     && rm -rf /var/lib/apt/lists/*
 
-COPY worker/*.ts ./
-COPY worker/playwright/ ./playwright/
-COPY worker/vnc/ ./vnc/
-COPY containers/worker/fcitx5/profile /root/.config/fcitx5/profile
+COPY --chown=worker:worker worker/*.ts ./
+COPY --chown=worker:worker worker/playwright/ ./playwright/
+COPY --chown=worker:worker worker/security/ ./security/
+COPY --chown=worker:worker worker/vnc/ ./vnc/
+COPY containers/worker/fcitx5/profile /etc/xdg/fcitx5/profile
 
 EXPOSE 3000
+USER 10001:10001
 CMD ["node", "server.ts"]

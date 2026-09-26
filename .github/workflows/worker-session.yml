@@ -11,6 +11,10 @@ on:
         options:
           - smoke_test
           - session
+      session_id:
+        description: Session identifier issued by the Cloudflare API (required for session mode)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -31,6 +35,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Validate session configuration
+        if: inputs.mode == 'session'
+        shell: bash
+        env:
+          WORKER_SESSION_ID: ${{ inputs.session_id }}
+          WORKER_SESSION_PUBLIC_KEY: ${{ vars.WORKER_SESSION_PUBLIC_KEY }}
+        run: |
+          if [[ -z "$WORKER_SESSION_ID" || -z "$WORKER_SESSION_PUBLIC_KEY" ]]; then
+            echo "session mode requires session_id and the WORKER_SESSION_PUBLIC_KEY repository variable."
+            exit 1
+          fi
+
       - name: Build Worker image
         uses: docker/build-push-action@v6
         with:
@@ -42,11 +58,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start Worker container
+        env:
+          WORKER_SESSION_ID: ${{ inputs.session_id }}
+          WORKER_SESSION_PUBLIC_KEY: ${{ vars.WORKER_SESSION_PUBLIC_KEY }}
         run: >-
           docker run --detach
           --name browser-worker
           --init
           --publish 127.0.0.1:3000:3000
+          --read-only
+          --cap-drop ALL
+          --security-opt no-new-privileges
+          --tmpfs /tmp:rw,nosuid,nodev,size=512m
+          --tmpfs /home/worker/.cache:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=256m
+          --tmpfs /home/worker/.config:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=32m
+          --shm-size 512m
+          --env WORKER_SESSION_ID
+          --env WORKER_SESSION_PUBLIC_KEY
           browser-worker:session
 
       - name: Check Worker health
@@ -76,8 +104,13 @@ jobs:
           while [[ "$(docker inspect --format '{{.State.Running}}' browser-worker 2>/dev/null || true)" == "true" ]]; do
             sleep 30
           done
-          echo "Worker container stopped unexpectedly."
-          exit 1
+          exit_code="$(docker inspect --format '{{.State.ExitCode}}' browser-worker 2>/dev/null || echo 1)"
+          if [[ "$exit_code" == "0" ]]; then
+            echo "Worker session ended normally."
+            exit 0
+          fi
+          echo "Worker container stopped unexpectedly with exit code $exit_code."
+          exit "$exit_code"
 
       - name: Show Worker logs on failure
         if: failure()

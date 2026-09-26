@@ -24,7 +24,7 @@ function httpUrl(value: string, name: string): URL {
 function allowedOrigins(): Set<string> {
   // Origin はスキーム・ホスト・ポートだけを含む。複数指定はカンマ区切り。
   const raw = process.env.WORKER_ALLOWED_ORIGINS
-    ?? 'http://localhost:3001,http://127.0.0.1:3001'
+    ?? 'https://web.youdawanchi.workers.dev,http://localhost:3001,http://127.0.0.1:3001'
   const origins = raw.split(',').map((origin) => origin.trim()).filter(Boolean)
   if (origins.length === 0) throw new Error('WORKER_ALLOWED_ORIGINS must not be empty')
   return new Set(origins.map((origin) => {
@@ -42,9 +42,16 @@ export const config = {
   // UI の描画領域とポインター座標にも同じサイズを使う。
   viewport: { width: 1280, height: 720 },
   heartbeatMs: 15_000,
+  disconnectGraceMs: envInteger('WORKER_DISCONNECT_GRACE_SECONDS', 600, 10, 3600) * 1000,
   initialUrl: httpUrl(
     process.env.WORKER_INITIAL_URL ?? 'https://en.wikipedia.org/wiki/Main_Page',
     'WORKER_INITIAL_URL',
   ).href,
   allowedOrigins: allowedOrigins(),
+  sessionAuth: {
+    sessionId: process.env.WORKER_SESSION_ID?.trim() ?? '',
+    audience: process.env.WORKER_SESSION_AUDIENCE?.trim() || 'browser-worker',
+    publicKeyPem: (process.env.WORKER_SESSION_PUBLIC_KEY ?? '').replace(/\\n/g, '\n').trim(),
+    maxTokenTtlSeconds: envInteger('WORKER_SESSION_MAX_TOKEN_TTL_SECONDS', 300, 30, 900),
+  },
 }

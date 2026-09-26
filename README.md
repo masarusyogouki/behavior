@@ -25,6 +25,8 @@ Worker は Xvfb 上の Chromium を使います。Docker ビルドでは Chromiu
 
 フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
 
+制御WebSocketはRS256の短期セッションJWTを必須とし、`behavior.v1` と `behavior.jwt.<JWT>` の2つのWebSocketサブプロトコルで渡します。Workerには `WORKER_SESSION_PUBLIC_KEY`、`WORKER_SESSION_ID`、`WORKER_SESSION_AUDIENCE` だけを設定し、署名用秘密鍵は渡しません。JWTは `sessionId`、`audience`、`exp`、`jti` を検証し、一度使用した `jti` を拒否します。現在はCloudflare APIによるJWT発行とWeb画面への受け渡しが未接続のため、通常のローカル画面からの接続はその工程の完了後に再開します。
+
 Cloudflare Workers 向けのローカル確認は `web` ディレクトリで行います。`build:vinext` が Workers 用成果物を生成し、`start:vinext` が Wrangler のローカル runtime で配信します。`dev` は従来どおり `http://localhost:3001` の Next.js 開発サーバーを起動します。
 
 ```powershell
@@ -41,7 +43,7 @@ cd web
 pnpm deploy:vinext
 ```
 
-現在の Worker は接続ごとに Chromium を起動して WebSocket を維持します。Worker を Vercel に配置する場合は、コンテナ起動方式、実行時間、Chromium の実行可否を別途検証してください。公開 Worker の Origin チェックは認証ではないため、インターネットに公開する前に認証とアクセス制御も必要です。
+現在の Worker は認証済み接続ごとに Chromium を起動して WebSocket を維持します。制御接続は同時に1本だけ許可し、通常切断後は既定で10分間だけ再接続を待ち、明示切断ではWorkerを終了します。Worker をVercelへ配置する場合は、コンテナ起動方式、実行時間、Chromiumの実行可否を別途検証してください。
 
 ## Worker 内の役割
 
@@ -52,6 +54,8 @@ pnpm deploy:vinext
 | [`server.ts`](worker/server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
 | [`protocol.ts`](worker/protocol.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
 | [`playwright/session.ts`](worker/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
+| [`security/session-auth.ts`](worker/security/session-auth.ts) | セッションJWTの署名・claim・有効期限・再利用を検証する。 |
+| [`security/network-policy.ts`](worker/security/network-policy.ts) | localhost、プライベートIP、リンクローカル、メタデータ宛てなどのブラウザー通信を遮断する。 |
 | [`vnc/display.ts`](worker/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
 | [`config.ts`](worker/config.ts) | 許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
 
@@ -82,4 +86,4 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-`http://localhost:3001` を開き、「接続」を押してください。
+JWT発行APIと画面の接続が完了するまでは、`http://localhost:3001` の画面表示のみ確認できます。認証を含むWorker接続は `worker/test` の自動テストとコンテナ統合テストで確認します。

@@ -4,6 +4,8 @@
 !worker/*.ts
 !worker/playwright/
 !worker/playwright/*.ts
+!worker/security/
+!worker/security/*.ts
 !worker/vnc/
 !worker/vnc/*.ts
 !containers/

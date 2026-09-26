@@ -9,6 +9,7 @@ export type BrowserCommand =
   | { type: 'key'; key: string }
   | { type: 'text'; text: string }
   | { type: 'navigate'; url: string }
+  | { type: 'disconnect' }
   | { type: 'back' | 'forward' | 'reload' }
 
 export type ElementSelector = {
@@ -81,6 +82,7 @@ export function parseCommand(raw: string, width: number, height: number): Browse
     case 'back':
     case 'forward':
     case 'reload':
+    case 'disconnect':
       return { type: value.type }
     default:
       return null

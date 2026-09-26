@@ -4,6 +4,7 @@ import type { Browser, BrowserContext, Page } from 'playwright'
 import { config } from '../config.ts'
 import type { BrowserCommand, WorkerMessage } from '../protocol.ts'
 import { installElementInspector, normalizeElementSnapshot } from './inspector.ts'
+import { isBrowserUrlAllowed } from '../security/network-policy.ts'
 
 type SessionOutput = {
   sendMessage(message: WorkerMessage): void
@@ -26,7 +27,20 @@ export class PlaywrightSession {
   async start(): Promise<void> {
     // 接続が起動途中で閉じられた場合、作成済みの資源をその場で破棄する。
     // Chromium を VNC と同じ X display で開き、OS 側の IME を使えるようにする。
-    const browser = await chromium.launch({ headless: false, args: ['--kiosk', '--gtk-version=3', '--window-position=0,0', `--window-size=${config.viewport.width},${config.viewport.height}`], env: this.output.environment() })
+    const browser = await chromium.launch({
+      headless: false,
+      args: [
+        '--kiosk',
+        '--gtk-version=3',
+        '--window-position=0,0',
+        `--window-size=${config.viewport.width},${config.viewport.height}`,
+        '--disable-background-networking',
+        '--disable-component-update',
+        '--disable-default-apps',
+        '--no-default-browser-check',
+      ],
+      env: this.output.environment(),
+    })
     if (this.closed) {
       await browser.close()
       return
@@ -40,6 +54,17 @@ export class PlaywrightSession {
       return
     }
     this.context = context
+
+    // URLの文字列表現だけでなくDNS解決結果も調べ、内部ネットワークへの通信を遮断する。
+    await context.route('**/*', async (route) => {
+      const url = route.request().url()
+      if (await isBrowserUrlAllowed(url)) {
+        await route.continue()
+      } else {
+        console.warn('Blocked browser request by network policy')
+        await route.abort('blockedbyclient')
+      }
+    })
 
     const inspectorBinding = `__behaviorElementSelected_${randomBytes(12).toString('hex')}`
     await context.exposeBinding(inspectorBinding, ({ frame }, payload: unknown) => {
@@ -112,6 +137,8 @@ export class PlaywrightSession {
         break
       case 'reload':
         await page.reload({ waitUntil: 'domcontentloaded' })
+        break
+      case 'disconnect':
         break
     }
   }
