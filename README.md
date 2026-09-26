@@ -23,7 +23,23 @@ MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge�
 
 Worker は Xvfb 上の Chromium を使います。Docker ビルドでは Chromium 本体、Xvfb、x11vnc をインストールします。アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。依存パッケージとブラウザーの取得内容も BuildKit のキャッシュに保持します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
 
-フロントエンドは `web` を Vercel などに配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境では `NEXT_PUBLIC_WORKER_WS_URL` に Worker の公開 WebSocket URL（HTTPS の場合は `wss://`）をビルド時に設定し、Worker 側の `WORKER_ALLOWED_ORIGINS` にフロントエンドの Origin を追加してください。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+
+Cloudflare Workers 向けのローカル確認は `web` ディレクトリで行います。`build:vinext` が Workers 用成果物を生成し、`start:vinext` が Wrangler のローカル runtime で配信します。`dev` は従来どおり `http://localhost:3001` の Next.js 開発サーバーを起動します。
+
+```powershell
+cd web
+pnpm install --frozen-lockfile
+pnpm build:vinext
+pnpm start:vinext
+```
+
+Cloudflare へログインした環境では次のコマンドで `*.workers.dev` へ配置します。初回実行時は Cloudflare の認証と Workers サブドメインの設定が必要です。
+
+```powershell
+cd web
+pnpm deploy:vinext
+```
 
 現在の Worker は接続ごとに Chromium を起動して WebSocket を維持します。Worker を Vercel に配置する場合は、コンテナ起動方式、実行時間、Chromium の実行可否を別途検証してください。公開 Worker の Origin チェックは認証ではないため、インターネットに公開する前に認証とアクセス制御も必要です。
 
