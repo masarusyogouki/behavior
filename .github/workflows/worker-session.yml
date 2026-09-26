@@ -96,26 +96,88 @@ jobs:
           echo "Worker did not become healthy within 120 seconds."
           exit 1
 
+      - name: Start Cloudflare Quick Tunnel
+        shell: bash
+        run: >-
+          docker run --detach
+          --name cloudflared
+          --network host
+          --read-only
+          --cap-drop ALL
+          --security-opt no-new-privileges
+          --tmpfs /tmp:rw,nosuid,nodev,size=64m
+          cloudflare/cloudflared:2026.9.3
+          tunnel --no-autoupdate --url http://127.0.0.1:3000 --loglevel info
+
+      - name: Check Quick Tunnel health
+        id: quick-tunnel
+        shell: bash
+        run: |
+          tunnel_url=""
+          for attempt in {1..60}; do
+            tunnel_url="$(docker logs cloudflared 2>&1 | grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' | tail -n 1 || true)"
+            if [[ -n "$tunnel_url" ]] && curl --fail --silent --show-error "$tunnel_url/health"; then
+              echo
+              echo "Quick Tunnel is healthy."
+              echo "url=$tunnel_url" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [[ "$(docker inspect --format '{{.State.Running}}' cloudflared 2>/dev/null || true)" != "true" ]]; then
+              echo "cloudflared stopped before the Quick Tunnel became healthy."
+              exit 1
+            fi
+            echo "Waiting for Quick Tunnel health check (${attempt}/60)..."
+            sleep 2
+          done
+          echo "Quick Tunnel did not become healthy within 120 seconds."
+          exit 1
+
+      - name: Create session connection metadata
+        shell: bash
+        env:
+          WORKER_SESSION_ID: ${{ inputs.session_id }}
+          TUNNEL_URL: ${{ steps.quick-tunnel.outputs.url }}
+        run: |
+          jq --null-input \
+            --arg sessionId "$WORKER_SESSION_ID" \
+            --arg tunnelUrl "$TUNNEL_URL" \
+            '{sessionId: $sessionId, tunnelUrl: $tunnelUrl}' \
+            > "$RUNNER_TEMP/worker-session.json"
+
+      - name: Upload session connection metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-session-${{ github.run_id }}
+          path: ${{ runner.temp }}/worker-session.json
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Keep session running
         if: inputs.mode == 'session'
         shell: bash
         run: |
-          echo "Worker session is running. Cancel this workflow to stop it."
-          while [[ "$(docker inspect --format '{{.State.Running}}' browser-worker 2>/dev/null || true)" == "true" ]]; do
+          echo "Worker session and Quick Tunnel are running. Cancel this workflow to stop them."
+          while [[ "$(docker inspect --format '{{.State.Running}}' browser-worker 2>/dev/null || true)" == "true" ]] \
+            && [[ "$(docker inspect --format '{{.State.Running}}' cloudflared 2>/dev/null || true)" == "true" ]]; do
             sleep 30
           done
-          exit_code="$(docker inspect --format '{{.State.ExitCode}}' browser-worker 2>/dev/null || echo 1)"
-          if [[ "$exit_code" == "0" ]]; then
-            echo "Worker session ended normally."
-            exit 0
-          fi
-          echo "Worker container stopped unexpectedly with exit code $exit_code."
-          exit "$exit_code"
+          worker_exit_code="$(docker inspect --format '{{.State.ExitCode}}' browser-worker 2>/dev/null || echo unknown)"
+          tunnel_exit_code="$(docker inspect --format '{{.State.ExitCode}}' cloudflared 2>/dev/null || echo unknown)"
+          echo "A session container stopped unexpectedly (Worker: $worker_exit_code, cloudflared: $tunnel_exit_code)."
+          exit 1
 
-      - name: Show Worker logs on failure
+      - name: Show container logs on failure
         if: failure()
-        run: docker logs browser-worker
+        shell: bash
+        run: |
+          echo "=== browser-worker logs ==="
+          docker logs browser-worker 2>&1 || true
+          echo "=== cloudflared logs ==="
+          docker logs cloudflared 2>&1 || true
 
-      - name: Remove Worker container
+      - name: Remove session containers
         if: always()
-        run: docker rm --force browser-worker 2>/dev/null || true
+        shell: bash
+        run: |
+          docker rm --force cloudflared 2>/dev/null || true
+          docker rm --force browser-worker 2>/dev/null || true
