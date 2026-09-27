@@ -4,17 +4,19 @@ import test from 'node:test'
 
 import { createGitHubAppJwt, GitHubAppClient } from './github-app.ts'
 
+const testAppId = '123456'
+const testInstallationId = '789012'
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs1' }).toString()
 
 test('creates a short-lived RS256 GitHub App JWT', () => {
-  const token = createGitHubAppJwt({ appId: '5086041', privateKey: privateKeyPem }, 2_000_000_000)
+  const token = createGitHubAppJwt({ appId: testAppId, privateKey: privateKeyPem }, 2_000_000_000)
   const [header, payload, signature] = token.split('.')
   assert.deepEqual(JSON.parse(Buffer.from(header, 'base64url').toString()), { alg: 'RS256', typ: 'JWT' })
   assert.deepEqual(JSON.parse(Buffer.from(payload, 'base64url').toString()), {
     iat: 1_999_999_940,
     exp: 2_000_000_540,
-    iss: '5086041',
+    iss: testAppId,
   })
   assert.equal(
     verify('RSA-SHA256', Buffer.from(`${header}.${payload}`), publicKey, Buffer.from(signature, 'base64url')),
@@ -29,15 +31,15 @@ test('exchanges the app JWT for an installation token and reuses it', async () =
     return Response.json({ token: 'installation-token', expires_at: '2999-01-01T00:00:00Z' })
   }) as typeof fetch
   const client = new GitHubAppClient({
-    appId: '5086041',
-    installationId: '165150577',
+    appId: testAppId,
+    installationId: testInstallationId,
     privateKey: privateKeyPem,
   }, fetchMock)
 
   assert.equal((await client.installationToken()).token, 'installation-token')
   assert.equal((await client.installationToken()).token, 'installation-token')
   assert.equal(requests.length, 1)
-  assert.equal(requests[0].url, 'https://api.github.com/app/installations/165150577/access_tokens')
+  assert.equal(requests[0].url, `https://api.github.com/app/installations/${testInstallationId}/access_tokens`)
   const headers = new Headers(requests[0].init?.headers)
   assert.match(headers.get('Authorization') ?? '', /^Bearer [^.]+\.[^.]+\.[^.]+$/)
 })
@@ -45,8 +47,8 @@ test('exchanges the app JWT for an installation token and reuses it', async () =
 test('does not include credentials in GitHub API errors', async () => {
   const fetchMock = (async () => Response.json({ message: 'Bad credentials' }, { status: 401 })) as typeof fetch
   const client = new GitHubAppClient({
-    appId: '5086041',
-    installationId: '165150577',
+    appId: testAppId,
+    installationId: testInstallationId,
     privateKey: privateKeyPem,
   }, fetchMock)
 

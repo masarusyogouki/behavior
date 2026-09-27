@@ -1,4 +1,24 @@
+**/node_modules/
 /.pnpm-store/
-/.env
-/web/.env
-/web/.env.local
+
+# Local environment and Cloudflare development secrets
+**/.env
+**/.env.*
+!**/.env.example
+**/.dev.vars
+**/.dev.vars.*
+
+# Private keys and certificate bundles
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local build and runtime output
+**/.wrangler/
+**/.vinext/
+*.dockerbuild
+worker-session*.json
+
+# Local handoff notes (must never be committed)
+/IMPLEMENTATION_PLAN.md
