@@ -1,4 +1,4 @@
-import { generateKeyPairSync, randomUUID } from 'node:crypto'
+import { generateKeyPairSync, randomUUID, randomBytes } from 'node:crypto'
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
@@ -29,11 +29,13 @@ updateEnv('.env', '.env.example', {
   WORKER_ALLOWED_ORIGINS: 'http://localhost:3001,http://127.0.0.1:3001',
 })
 updateEnv('web/.env.local', 'web/.env.example', {
+  BEHAVIOR_ACCESS_KEY: randomBytes(32).toString('base64url'),
   WORKER_CONNECTION_MODE: 'local',
   WORKER_LOCAL_WS_URL: 'ws://127.0.0.1:3000',
   WORKER_SESSION_ID: sessionId,
   WORKER_SESSION_PRIVATE_KEY: privateKey,
 })
 console.log('Local JWT keys and session ID configured. Restart web and recreate the Worker container after running this command.')
+console.log('Enter BEHAVIOR_ACCESS_KEY from web/.env.local in the browser on first connection. Do not share or commit it.')
 console.log('Terminal 1: docker compose up --build --force-recreate worker')
 console.log('Terminal 2: pnpm --dir web dev')

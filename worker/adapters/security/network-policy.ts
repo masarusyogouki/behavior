@@ -1,10 +1,12 @@
 import { lookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 
-type Address = { address: string; family: number }
-type Resolver = (hostname: string) => Promise<Address[]>
+export type Address = { address: string; family: number }
+export type Resolver = (hostname: string) => Promise<Address[]>
 
 const blocked = new BlockList()
+const globalIpv6 = new BlockList()
+globalIpv6.addSubnet('2000::', 3, 'ipv6')
 
 const blockedIpv4Ranges = ([
   ['0.0.0.0', 8],
@@ -27,6 +29,12 @@ const blockedIpv4Ranges = ([
 for (const [network, prefix] of [
   ['::', 128],
   ['::1', 128],
+  ['::ffff:0:0', 96],
+  ['::', 96],
+  ['64:ff9b::', 96],
+  ['64:ff9b:1::', 48],
+  ['2001::', 32],
+  ['2002::', 16],
   ['100::', 64],
   ['2001:2::', 48],
   ['2001:10::', 28],
@@ -57,12 +65,21 @@ export function isPublicAddress(address: string): boolean {
   const family = isIP(address)
   if (family === 4) return !isBlockedIpv4(address)
   // IPv4-mapped IPv6を迂回路にせず、表記にかかわらず拒否する。
-  if (family === 6 && address.toLowerCase().startsWith('::ffff:')) return false
-  if (family === 6) return !blocked.check(address, 'ipv6')
+  if (family === 6) return globalIpv6.check(address, 'ipv6') && !blocked.check(address, 'ipv6')
   return false
 }
 
 const systemResolver: Resolver = async (hostname) => lookup(hostname, { all: true, verbatim: true })
+
+// Return the actual address to connect to. The proxy must not resolve the hostname again.
+export async function resolvePublicAddress(rawHostname: string, resolver: Resolver = systemResolver): Promise<Address> {
+  const hostname = normalizedHostname(rawHostname).toLowerCase().replace(/\.$/, '')
+  if (hostname === 'localhost' || /\.(localhost|local|internal|home\.arpa)$/.test(hostname)) throw new Error('Blocked destination')
+  const family = isIP(hostname)
+  const addresses = family ? [{ address: hostname, family }] : await resolver(hostname)
+  if (!addresses.length || !addresses.every(({ address }) => isPublicAddress(address))) throw new Error('Blocked destination')
+  return addresses[0]
+}
 
 export async function isBrowserUrlAllowed(rawUrl: string, resolver: Resolver = systemResolver): Promise<boolean> {
   let url: URL

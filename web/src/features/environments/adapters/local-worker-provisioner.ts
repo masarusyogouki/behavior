@@ -1,5 +1,9 @@
 import type { EnvironmentProvisioner, ProvisionedEnvironment } from '../application/ports.ts'
-import { EnvironmentNotFoundError } from '../domain/environment.ts'
+import { EnvironmentConflictError, EnvironmentNotFoundError } from '../domain/environment.ts'
+
+// Development mode has one fixed Worker ID. Do not issue a second browser an
+// ownership cookie for the same environment in this web process.
+const claimedWorkers = new Set<string>()
 
 // Docker Compose owns the local container lifecycle; this adapter checks readiness.
 export class LocalWorkerProvisioner implements EnvironmentProvisioner {
@@ -20,11 +24,16 @@ export class LocalWorkerProvisioner implements EnvironmentProvisioner {
     this.healthUrl = url.href
   }
 
-  async hasActiveEnvironment(): Promise<boolean> { return false }
+  async hasActiveEnvironment(): Promise<boolean> { return claimedWorkers.has(this.sessionId) }
 
   async start(sessionId: string): Promise<void> {
     this.requireSession(sessionId)
-    if (!(await this.healthy())) throw new Error('Start the local Worker with docker compose up --build worker')
+    if (claimedWorkers.has(sessionId)) throw new EnvironmentConflictError('A local Worker session is already assigned to a browser')
+    claimedWorkers.add(sessionId)
+    if (!(await this.healthy())) {
+      claimedWorkers.delete(sessionId)
+      throw new Error('Start the local Worker with docker compose up --build worker')
+    }
   }
 
   async find(sessionId: string): Promise<ProvisionedEnvironment> {

@@ -4,12 +4,18 @@ services:
     build:
       context: .
       dockerfile: containers/worker/Dockerfile
+    image: behavior-worker:local
+    depends_on:
+      egress:
+        condition: service_healthy
+    networks: [browser]
     init: true
     read_only: true
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
+      - seccomp:./containers/worker/seccomp_profile.json
     tmpfs:
       - /tmp:rw,nosuid,nodev,size=512m
       - /home/worker/.cache:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=256m
@@ -17,6 +23,34 @@ services:
     cpus: "${WORKER_CPUS}"
     mem_limit: "${WORKER_MEMORY_LIMIT}"
     shm_size: "${WORKER_SHM_SIZE}"
+    pids_limit: 512
     env_file: .env
+    environment:
+      WORKER_PROXY_URL: http://egress:3128
     ports:
       - "127.0.0.1:3000:3000"
+  egress:
+    platform: "${WORKER_PLATFORM:-linux/amd64}"
+    image: behavior-worker:local
+    build:
+      context: .
+      dockerfile: containers/worker/Dockerfile
+    command: [node, egress-proxy.ts]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [browser, outbound]
+    cpus: '0.5'
+    mem_limit: 128m
+    pids_limit: 64
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3128/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  browser:
+    internal: true
+  outbound: {}

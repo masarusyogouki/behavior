@@ -26,6 +26,7 @@ export function useRemoteSession() {
   const [environmentState, setEnvironmentState] = useState<EnvironmentState | null>(null)
   const [notice, setNotice] = useState('')
   const [selectedElement, setSelectedElement] = useState<ElementSnapshot | null>(null)
+  const [accessKey, setAccessKey] = useState('')
 
   useEffect(() => () => {
     pollAbortRef.current?.abort()
@@ -164,6 +165,17 @@ export function useRemoteSession() {
     const controller = new AbortController()
     pollAbortRef.current = controller
     try {
+      if (accessKey) {
+        const login = await fetch('/api/auth', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessKey }), signal: controller.signal,
+        })
+        if (!login.ok) {
+          const body = await login.json() as { message?: string }
+          throw new Error(body.message ?? '認証に失敗しました。')
+        }
+        setAccessKey('')
+      }
       let sessionId = window.localStorage.getItem('behavior.sessionId')
       if (!sessionId) {
         const response = await fetch('/api/environments', { method: 'POST', signal: controller.signal })
@@ -187,5 +199,5 @@ export function useRemoteSession() {
     }
   }
 
-  return { screenRef, rfbRef, status, environmentState, notice, setNotice, selectedElement, connect, disconnect }
+  return { screenRef, rfbRef, status, environmentState, notice, setNotice, selectedElement, accessKey, setAccessKey, connect, disconnect }
 }

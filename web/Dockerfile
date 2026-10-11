@@ -4,6 +4,7 @@ WORKDIR /app/web
 RUN corepack enable && corepack prepare pnpm@11.8.0 --activate
 
 COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+COPY web/patches/ ./patches/
 RUN pnpm install --frozen-lockfile
 
 COPY web/ ./

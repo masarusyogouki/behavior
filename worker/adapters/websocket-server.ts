@@ -34,10 +34,11 @@ export function createWorkerServer({ config, tokenVerifier, createSession }: Wor
     response.writeHead(404).end()
   })
   const controls = new WebSocketServer({
+    maxPayload: 16_384,
     noServer: true,
     handleProtocols: (protocols) => protocols.has(controlProtocol()) ? controlProtocol() : false,
   })
-  const viewers = new WebSocketServer({ noServer: true })
+  const viewers = new WebSocketServer({ noServer: true, maxPayload: 1_048_576 })
 
   type VncSession = { port: number; owner: WebSocket; viewer?: WebSocket }
   const sessions = new Map<string, VncSession>()
@@ -135,6 +136,7 @@ export function createWorkerServer({ config, tokenVerifier, createSession }: Wor
     let fatalFailure = false
     let waitingForPong = false
     let actions = Promise.resolve()
+    let pendingActions = 0
     const sendMessage = (message: WorkerMessage) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message))
     }
@@ -150,6 +152,8 @@ export function createWorkerServer({ config, tokenVerifier, createSession }: Wor
     ws.on('error', (error) => { console.error('WebSocket error:', error); ws.terminate() })
     ws.on('message', (data, isBinary) => {
       if (isBinary || disconnected) return
+      if (pendingActions >= 128) { ws.close(1008, 'too many pending commands'); return }
+      pendingActions++
       actions = actions.then(async () => {
         if (disconnected) return
         const command = parseCommand(data.toString(), config.viewport.width, config.viewport.height)
@@ -162,7 +166,7 @@ export function createWorkerServer({ config, tokenVerifier, createSession }: Wor
         await session.execute(command)
       }).catch((error: unknown) => {
         sendMessage({ type: 'error', message: error instanceof Error ? error.message : '操作に失敗しました' })
-      })
+      }).finally(() => { pendingActions-- })
     })
     ws.on('close', () => {
       disconnected = true

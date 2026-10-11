@@ -25,7 +25,7 @@ function physicalKeysym(code: string, shift: boolean): number | null {
 }
 
 function App() {
-  const { screenRef, rfbRef, status, environmentState, notice, setNotice, selectedElement, connect, disconnect } = useRemoteSession()
+  const { screenRef, rfbRef, status, environmentState, notice, setNotice, selectedElement, accessKey, setAccessKey, connect, disconnect } = useRemoteSession()
 
   const focusScreen = (event: MouseEvent<HTMLDivElement>) => {
     // noVNC が描いた canvas をクリックした後、キーボード入力先を遠隔画面にする。
@@ -67,6 +67,7 @@ function App() {
           <div><span className="viewer-eyebrow">REMOTE SESSION</span><h1>Browser</h1></div>
         </div>
         <div className="viewer-controls">
+          {!connected && <input className="viewer-access-key" type="password" aria-label="アクセスキー" placeholder="アクセスキー（初回）" autoComplete="off" value={accessKey} onChange={(event) => setAccessKey(event.target.value)} disabled={status === 'connecting'} />}
           <p className={`viewer-status viewer-status-${status}`} role="status"><span className="viewer-status-dot" aria-hidden="true" />{statusText}</p>
           <button className="viewer-connect" type="button" onClick={() => void connect()} disabled={status === 'connecting' || connected}>環境を立ち上げる</button>
           <button className="viewer-disconnect" type="button" onClick={disconnect} disabled={status !== 'connecting' && !connected}>切断</button>

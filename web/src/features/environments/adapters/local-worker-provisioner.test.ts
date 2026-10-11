@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import test from 'node:test'
 import { LocalWorkerProvisioner } from './local-worker-provisioner.ts'
-import { EnvironmentNotFoundError } from '../domain/environment.ts'
+import { EnvironmentConflictError, EnvironmentNotFoundError } from '../domain/environment.ts'
 
 const sessionId = 'd0b43fa6-8006-4d95-8cdd-b13810875589'
 
@@ -19,11 +19,13 @@ test('local provisioner checks health and returns the local endpoint only for it
   const url = `ws://127.0.0.1:${address.port}/`
   const provisioner = new LocalWorkerProvisioner(sessionId, url)
   await provisioner.start(sessionId)
+  assert.equal(await new LocalWorkerProvisioner(sessionId, url).hasActiveEnvironment(), true)
+  await assert.rejects(new LocalWorkerProvisioner(sessionId, url).start(sessionId), EnvironmentConflictError)
   assert.deepEqual(await provisioner.find(sessionId), { state: 'ready', websocketUrl: url })
   await assert.rejects(provisioner.find('another-session'), EnvironmentNotFoundError)
   healthy = false
   assert.equal((await provisioner.find(sessionId)).state, 'failed')
-  await assert.rejects(provisioner.start(sessionId), /Start the local Worker/)
+  await assert.rejects(provisioner.start(sessionId), EnvironmentConflictError)
 })
 
 test('local provisioner rejects remote URLs and redirects to a remote health endpoint', async (t) => {

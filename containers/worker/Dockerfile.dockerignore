@@ -3,6 +3,7 @@
 !worker/package.json
 !worker/*.ts
 !worker/pnpm-lock.yaml
+!worker/pnpm-workspace.yaml
 !worker/application/
 !worker/application/*.ts
 !worker/adapters/

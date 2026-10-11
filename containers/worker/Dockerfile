@@ -9,7 +9,7 @@ ENV HOME=/home/worker
 
 WORKDIR /app/worker
 
-COPY --chmod=0644 worker/package.json worker/pnpm-lock.yaml ./
+COPY --chmod=0644 worker/package.json worker/pnpm-lock.yaml worker/pnpm-workspace.yaml ./
 
 # 依存の取得結果をビルド間で再利用する。
 RUN --mount=type=cache,target=/opt/pnpm/store \

@@ -1,5 +1,6 @@
 **/node_modules/
 /.pnpm-store/
+/.security-work/
 
 # Local environment and Cloudflare development secrets
 **/.env

@@ -38,6 +38,7 @@ function allowedOrigins(): Set<string> {
 
 export const config = {
   host: '0.0.0.0',
+  proxyUrl: process.env.WORKER_PROXY_URL ?? '',
   port: envInteger('PORT', 3000, 1, 65535),
   // UI の描画領域とポインター座標にも同じサイズを使う。
   viewport: { width: 1280, height: 720 },
