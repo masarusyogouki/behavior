@@ -1,0 +1,15 @@
+**
+!web/
+!web/**
+web/node_modules/
+web/.next/
+web/dist/
+web/.env*
+!web/.env.example
+web/.dev.vars*
+web/.wrangler/
+web/.vinext/
+!shared/
+!shared/contracts/
+!shared/contracts/browser.ts
+!shared/contracts/environment.ts

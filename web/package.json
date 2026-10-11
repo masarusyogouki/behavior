@@ -5,20 +5,21 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -H 127.0.0.1 -p 3001",
     "build": "next build",
     "lint": "oxlint",
-    "test": "node --experimental-strip-types --test src/server/*.test.ts",
+    "test": "node --experimental-strip-types --test src/server/*.test.ts src/features/environments/application/*.test.ts src/features/environments/adapters/*.test.ts",
     "start": "next start -p 3001",
     "dev:vinext": "vinext dev --port 3001",
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
-    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json"
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
     "@vinext/cloudflare": "1.0.0-beta.10",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-server-dom-webpack": "^19.3.0",

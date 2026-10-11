@@ -58,6 +58,22 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Start isolated browser network and egress proxy
+        run: |
+          docker network create --internal behavior-browser
+          docker run --detach --name browser-egress --network bridge \
+            --init --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --cpus 0.5 --memory 128m --pids-limit 64 \
+            browser-worker:session node egress-proxy.ts
+          docker network connect behavior-browser browser-egress
+          for attempt in {1..30}; do
+            if docker exec browser-egress node -e "fetch('http://127.0.0.1:3128/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
       - name: Start Worker container
         env:
           WORKER_SESSION_ID: ${{ inputs.session_id }}
@@ -65,17 +81,22 @@ jobs:
         run: >-
           docker run --detach
           --name browser-worker
+          --network behavior-browser
           --init
           --publish 127.0.0.1:3000:3000
           --read-only
           --cap-drop ALL
           --security-opt no-new-privileges
+          --security-opt seccomp=containers/worker/seccomp_profile.json
           --tmpfs /tmp:rw,nosuid,nodev,size=512m
           --tmpfs /home/worker/.cache:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=256m
           --tmpfs /home/worker/.config:rw,nosuid,nodev,uid=10001,gid=10001,mode=0700,size=32m
           --shm-size 512m
+          --cpus 4 --memory 2g --pids-limit 512
+          --env WORKER_PROXY_URL=http://browser-egress:3128
           --env WORKER_SESSION_ID
           --env WORKER_SESSION_PUBLIC_KEY
+          --mount type=bind,source=${{ github.workspace }}/worker/test,target=/app/worker/test,readonly
           browser-worker:session
 
       - name: Check Worker health
@@ -96,6 +117,10 @@ jobs:
           done
           echo "Worker did not become healthy within 120 seconds."
           exit 1
+
+      - name: Verify sandbox and browser network isolation
+        if: inputs.mode == 'smoke_test'
+        run: docker exec --env WORKER_INITIAL_URL=https://example.com browser-worker node test/container-security-probe.mjs
 
       - name: Start Cloudflare Quick Tunnel
         shell: bash
@@ -184,6 +209,7 @@ jobs:
           docker logs browser-worker 2>&1 || true
           echo "=== cloudflared logs ==="
           docker logs cloudflared 2>&1 || true
+          docker logs browser-egress 2>&1 || true
 
       - name: Remove session containers
         if: always()
@@ -191,3 +217,5 @@ jobs:
         run: |
           docker rm --force cloudflared 2>/dev/null || true
           docker rm --force browser-worker 2>/dev/null || true
+          docker rm --force browser-egress 2>/dev/null || true
+          docker network rm behavior-browser 2>/dev/null || true

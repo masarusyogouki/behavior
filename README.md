@@ -1,29 +1,14 @@
-﻿# behavior
+# behavior
 
 MagicPod のように、ブラウザ上でテストを作成・実行できるサービスを目指すプロジェクトです。
 
-## TypeScript を選んだ理由
-
-- ブラウザ操作には、ロケータ、自動待機、トレースなどを利用できる Playwright を採用する。
-- Playwright は JavaScript / TypeScript、Python、Java、.NET 向けの API を公式に提供しているが、現時点では Go を公式サポートしていない。
-- Go から利用する場合はコミュニティ実装に依存するか、Playwright の内部プロトコルとの接続を自前で保守する必要がある。Playwright の更新に追従する負担をプロジェクト側で持たないため、公式 API を利用する。
-- 現在の UI が React と TypeScript で実装されているため、バックエンドと Playwright Worker も TypeScript にすると、型や通信メッセージを共有しやすい。
-- Playwright の中心実装と公式テストランナーは Node.js 上で動作するため、TypeScript から利用する構成が最も直接的で、公式ドキュメントや周辺機能も活用しやすい。
-
-将来 Go が Playwright の公式対応言語になった場合の置き換えを妨げないように、テスト定義と通信 API は Playwright 固有の型から分離する。UI やデータベースには製品独自の操作形式を保存し、Playwright への変換は実行部分の内部に閉じ込める。
-
-## ブラウザの方針
-
-MVP では Chromium のみをコンテナに含める。Chrome、Microsoft Edge、Firefox などをすべて対象にするとイメージサイズと検証範囲が増えるため、必要になった段階で対応ブラウザを追加する。
-画面内をクリックしてフォーカスすると、Worker 側の Fcitx5/Anthy で日本語を変換できます。変換中の文字と候補は VNC 画面に表示されます。手元の IME はオフにし、遠隔画面では `Ctrl+Space` で日本語入力を切り替えてください。Worker イメージには日本語表示用フォントを含め、ブラウザーのロケールを `ja-JP` に設定します。
-
 ## ビルドと配置
 
-設定ファイルは2つに分かれています。ルートの `.env.example` を `.env` にコピーすると、許可する Origin、CPU・メモリ上限などを Docker Compose と Worker に設定できます。`web/.env.example` を `web/.env.local` にコピーすると、フロントエンドの `NEXT_PUBLIC_WORKER_WS_URL` を設定できます。Next.js は `web` ディレクトリの環境変数を読み込むため、ルートの `.env` に書いても反映されません。
+設定ファイルは2つに分かれています。ルートの `.env` は Docker Compose と Worker 用、`web/.env.local` は Next.js 用です。`npm run setup:local` で両方の設定と開発用RSA鍵・セッションIDを準備できます。既存ファイルの接続・認証設定はローカル用に更新し、それ以外の設定は保持します。鍵とセッションIDを毎回更新するため、実行後はwebとWorkerを再起動してください。生成した設定はGitの追跡対象外です。
 
 Worker は Xvfb 上の Chromium を使います。Docker ビルドでは Chromium 本体、Xvfb、x11vnc をインストールします。アプリのソースだけを変更したときは依存パッケージとブラウザーのレイヤーを再利用します。依存パッケージとブラウザーの取得内容も BuildKit のキャッシュに保持します。初回ビルドでは OS パッケージとブラウザーの取得が必要です。
 
-フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境ではWeb APIがGitHub Appを介してWorker workflowを起動し、Quick Tunnelの一時URLへ接続します。`NEXT_PUBLIC_WORKER_WS_URL` はlocalhostでの直接接続専用です。Worker 側の `WORKER_ALLOWED_ORIGINS` にはフロントエンドのOriginを指定します。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
+フロントエンドは vinext を使って Cloudflare Workers に配置できます。公開環境ではWeb APIがGitHub Appを介してWorker workflowを起動し、Quick Tunnelの一時URLへ接続します。ローカルでは `WORKER_CONNECTION_MODE=local` によってWeb APIがDockerのWorkerの稼働を確認し、同じ形式のJWTを発行します。`WORKER_LOCAL_WS_URL` はサーバー側の設定で、loopback宛ての `ws://` のみ指定できます。localモードは `pnpm dev` 専用です。本番では `WORKER_CONNECTION_MODE` を設定せず、Cloudflare Secretsに本番用の署名鍵とGitHub App設定を登録してください。Worker 側の `WORKER_ALLOWED_ORIGINS` にはフロントエンドのOriginを指定します。Worker は `PORT` 環境変数で待ち受けポートを変更でき、`/health` でヘルスチェックできます。
 
 制御WebSocketはRS256の短期セッションJWTを必須とし、`behavior.v1` と `behavior.jwt.<JWT>` の2つのWebSocketサブプロトコルで渡します。Workerには `WORKER_SESSION_PUBLIC_KEY`、`WORKER_SESSION_ID`、`WORKER_SESSION_AUDIENCE` だけを設定し、署名用秘密鍵は渡しません。JWTは `sessionId`、`audience`、`exp`、`jti` を検証し、一度使用した `jti` を拒否します。GitHub App秘密鍵とセッションJWT署名鍵はCloudflare Workers Secretsだけに保存し、ブラウザーやWorkerコンテナへ渡しません。
 
@@ -51,12 +36,12 @@ pnpm deploy:vinext
 
 | ファイル | 役割 |
 | --- | --- |
-| [`server.ts`](worker/server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
-| [`protocol.ts`](worker/protocol.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
-| [`playwright/session.ts`](worker/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
-| [`security/session-auth.ts`](worker/security/session-auth.ts) | セッションJWTの署名・claim・有効期限・再利用を検証する。 |
-| [`security/network-policy.ts`](worker/security/network-policy.ts) | localhost、プライベートIP、リンクローカル、メタデータ宛てなどのブラウザー通信を遮断する。 |
-| [`vnc/display.ts`](worker/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
+| [`adapters/websocket-server.ts`](worker/adapters/websocket-server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
+| [`shared/contracts/browser.ts`](shared/contracts/browser.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
+| [`adapters/playwright/session.ts`](worker/adapters/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
+| [`adapters/security/session-auth.ts`](worker/adapters/security/session-auth.ts) | セッションJWTの署名・claim・有効期限・再利用を検証する。 |
+| [`adapters/security/network-policy.ts`](worker/adapters/security/network-policy.ts) | localhost、プライベートIP、リンクローカル、メタデータ宛てなどのブラウザー通信を遮断する。 |
+| [`adapters/vnc/display.ts`](worker/adapters/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
 | [`config.ts`](worker/config.ts) | 許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
 
 画面は x11vnc → Worker の `/vnc/<一時トークン>` → noVNC の順で送ります。画面内の Chromium のタブやアドレスバー、Fcitx5/Anthy の変換候補は VNC 経由で操作・表示します。画面ごとに D-Bus と Fcitx5 を起動し、切断時に終了します。トークンは操作 WebSocket の接続ごとに発行し、切断時に破棄します。
@@ -66,8 +51,7 @@ pnpm deploy:vinext
 リポジトリのルートで、まず設定ファイルを作ります。
 
 ```powershell
-Copy-Item .env.example .env
-Copy-Item web/.env.example web/.env.local
+npm run setup:local
 ```
 
 次に、**ターミナルを2つ**使って起動します。
@@ -75,7 +59,7 @@ Copy-Item web/.env.example web/.env.local
 ターミナル1（worker）:
 
 ```powershell
-docker compose up --build worker
+docker compose up --build --force-recreate worker
 ```
 
 ターミナル2（Next.js）:
@@ -86,4 +70,23 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-JWT発行APIと画面の接続が完了するまでは、`http://localhost:3001` の画面表示のみ確認できます。認証を含むWorker接続は `worker/test` の自動テストとコンテナ統合テストで確認します。
+`http://localhost:3001` を開き、画面の接続操作でWorkerのブラウザー画面を確認します。ローカルではGitHub AppやCloudflareへのpushは不要で、現在の作業ツリーのコードを使用します。制御WebSocketのJWT認証とVNC画面の経路は本番と共通です。1つのWorkerへ接続できる画面は同時に1つです。明示切断するとWorkerも終了するため、再度試すときはターミナル1で `docker compose up worker` を実行してください。Workerのコードを変更した場合は `docker compose up --build worker` で再ビルドします。
+
+この手順ではCloudflare runtimeやGitHub Actions・Quick Tunnelの起動処理は検証しません。それらはWorkers用のローカルruntime、またはブランチのPreviewで別途確認します。
+
+```sh
+pnpm --dir web install --frozen-lockfile
+pnpm --dir worker install --frozen-lockfile
+npm test
+pnpm --dir web typecheck
+pnpm --dir worker typecheck
+pnpm --dir web lint
+pnpm --dir web build
+pnpm --dir web build:vinext
+```
+
+WebのDockerビルドも共有契約を含めるため、リポジトリルートをcontextにします。
+
+```sh
+docker build -f web/Dockerfile -t behavior-web .
+```

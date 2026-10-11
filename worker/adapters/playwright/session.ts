@@ -1,10 +1,10 @@
+import type { BrowserSession } from '../../application/ports.ts'
 import { chromium } from 'playwright'
 import { randomBytes } from 'node:crypto'
 import type { Browser, BrowserContext, Page } from 'playwright'
-import { config } from '../config.ts'
-import type { BrowserCommand, WorkerMessage } from '../protocol.ts'
+import { config } from '../../config.ts'
+import type { BrowserCommand, WorkerMessage } from '../../../shared/contracts/browser.ts'
 import { installElementInspector, normalizeElementSnapshot } from './inspector.ts'
-import { isBrowserUrlAllowed } from '../security/network-policy.ts'
 
 type SessionOutput = {
   sendMessage(message: WorkerMessage): void
@@ -12,7 +12,7 @@ type SessionOutput = {
   environment(): NodeJS.ProcessEnv
 }
 
-export class PlaywrightSession {
+export class PlaywrightSession implements BrowserSession {
   private readonly output: SessionOutput
   private browser?: Browser
   private context?: BrowserContext
@@ -25,10 +25,13 @@ export class PlaywrightSession {
   }
 
   async start(): Promise<void> {
+    if (!config.proxyUrl) throw new Error('WORKER_PROXY_URL is required; direct browser networking is disabled')
     // 接続が起動途中で閉じられた場合、作成済みの資源をその場で破棄する。
     // Chromium を VNC と同じ X display で開き、OS 側の IME を使えるようにする。
     const browser = await chromium.launch({
       headless: false,
+      chromiumSandbox: true,
+      proxy: { server: config.proxyUrl },
       args: [
         '--kiosk',
         '--gtk-version=3',
@@ -38,6 +41,8 @@ export class PlaywrightSession {
         '--disable-component-update',
         '--disable-default-apps',
         '--no-default-browser-check',
+        '--proxy-bypass-list=<-loopback>',
+        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
       ],
       env: this.output.environment(),
     })
@@ -48,23 +53,15 @@ export class PlaywrightSession {
     this.browser = browser
 
     // viewport を固定すると実際のブラウザー窓と VNC の座標がずれるため、窓のサイズを使う。
-    const context = await browser.newContext({ viewport: null, locale: 'ja-JP' })
+    const context = await browser.newContext({ viewport: null, locale: 'ja-JP', serviceWorkers: 'block', acceptDownloads: false })
     if (this.closed) {
       await context.close()
       return
     }
     this.context = context
 
-    // URLの文字列表現だけでなくDNS解決結果も調べ、内部ネットワークへの通信を遮断する。
-    await context.route('**/*', async (route) => {
-      const url = route.request().url()
-      if (await isBrowserUrlAllowed(url)) {
-        await route.continue()
-      } else {
-        console.warn('Blocked browser request by network policy')
-        await route.abort('blockedbyclient')
-      }
-    })
+    // The egress proxy resolves and pins the destination IP. This container has
+    // no external network route, including for Service Workers and WebRTC.
 
     const inspectorBinding = `__behaviorElementSelected_${randomBytes(12).toString('hex')}`
     await context.exposeBinding(inspectorBinding, ({ frame }, payload: unknown) => {

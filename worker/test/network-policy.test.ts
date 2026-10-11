@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { isBrowserUrlAllowed, isPublicAddress } from '../security/network-policy.ts'
+import { isBrowserUrlAllowed, isPublicAddress } from '../adapters/security/network-policy.ts'
 
 test('blocks private, loopback, link-local, documentation, and metadata IPv4 addresses', () => {
   for (const address of [

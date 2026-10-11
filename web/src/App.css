@@ -18,6 +18,15 @@
   align-items: center;
 }
 
+.viewer-access-key {
+  width: 180px;
+  padding: 9px 12px;
+  border: 1px solid #cbd4e1;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
 .viewer-header {
   flex: none;
   justify-content: space-between;

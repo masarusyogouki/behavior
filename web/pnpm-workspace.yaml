@@ -1,5 +1,10 @@
 packages:
   - '.'
+overrides:
+  source-map-js: 1.2.2
+  sharp: 0.35.5
 allowBuilds:
   esbuild: true
   workerd: true
+patchedDependencies:
+  braces@3.0.3: patches/braces@3.0.3.patch

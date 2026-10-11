@@ -1,76 +1,61 @@
 import assert from 'node:assert/strict'
-import { generateKeyPairSync, verify } from 'node:crypto'
 import test from 'node:test'
+import { environmentServiceFromEnv } from './environment-service.ts'
+import { generateKeyPairSync } from 'node:crypto'
+import { createServer } from 'node:http'
+import { SessionTokenVerifier } from '../../../worker/adapters/security/session-auth.ts'
 
-import { EnvironmentConflictError, EnvironmentService } from './environment-service.ts'
-
-const sessionId = '8d1ec3ae-4722-4a74-b31e-b053e232e9df'
-const run = {
-  id: 123,
-  display_title: `Worker Session / session / ${sessionId}`,
-  status: 'in_progress',
-  conclusion: null,
-  html_url: 'https://github.com/masarusyogouki/behavior/actions/runs/123',
-}
-
-class FakeGitHub {
-  readonly requests: Array<{ path: string; init?: RequestInit }> = []
-  private readonly responses: Response[]
-
-  constructor(responses: Response[]) {
-    this.responses = [...responses]
+test('local mode cannot be enabled in production', () => {
+  const env: Record<string, string | undefined> = process.env
+  const previousMode = process.env.WORKER_CONNECTION_MODE
+  const previousNodeEnv = process.env.NODE_ENV
+  try {
+    process.env.WORKER_CONNECTION_MODE = 'local'
+    env.NODE_ENV = 'production'
+    assert.throws(environmentServiceFromEnv, /requires development mode/)
+  } finally {
+    if (previousMode === undefined) delete process.env.WORKER_CONNECTION_MODE
+    else process.env.WORKER_CONNECTION_MODE = previousMode
+    if (previousNodeEnv === undefined) delete env.NODE_ENV
+    else env.NODE_ENV = previousNodeEnv
   }
-
-  async request(path: string, init?: RequestInit): Promise<Response> {
-    this.requests.push({ path, init })
-    const response = this.responses.shift()
-    if (!response) throw new Error(`Unexpected GitHub request: ${path}`)
-    return response
-  }
-}
-
-test('refuses to dispatch while another workflow run is active', async () => {
-  const github = new FakeGitHub([Response.json({ workflow_runs: [run] })])
-  const service = new EnvironmentService(github)
-  await assert.rejects(service.create(), EnvironmentConflictError)
-  assert.equal(github.requests.length, 1)
 })
 
-test('dispatches session mode with a generated session ID', async () => {
-  const github = new FakeGitHub([
-    Response.json({ workflow_runs: [] }),
-    new Response(null, { status: 204 }),
-  ])
-  const service = new EnvironmentService(github)
-  const created = await service.create()
-  assert.match(created.sessionId, /^[0-9a-f-]{36}$/)
-  assert.equal(github.requests[1].path, '/repos/masarusyogouki/behavior/actions/workflows/worker-session.yml/dispatches')
-  assert.deepEqual(JSON.parse(String(github.requests[1].init?.body)), {
-    ref: 'main',
-    inputs: { mode: 'session', session_id: created.sessionId },
-  })
-})
-
-test('returns a signed connection only from matching validated artifact metadata', async () => {
-  const github = new FakeGitHub([
-    Response.json({ workflow_runs: [run] }),
-    Response.json({ artifacts: [{ id: 456, name: 'worker-session.json', expired: false }] }),
-    Response.json({ sessionId, tunnelUrl: 'https://example-words.trycloudflare.com' }),
-  ])
+test('local API service issues JWTs accepted by the actual Worker verifier', async (t) => {
+  const server = createServer((_request, response) => response.end('ok'))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => new Promise<void>((resolve) => server.close(() => resolve())))
+  const address = server.address()
+  assert.ok(address && typeof address !== 'string')
   const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
-  const privateKeyPem = privateKey.export({ format: 'pem', type: 'pkcs8' }).toString()
-  const service = new EnvironmentService(github, () => privateKeyPem)
-
-  const status = await service.status(sessionId)
-  assert.equal(status.state, 'ready')
-  assert.equal(status.websocketUrl, 'wss://example-words.trycloudflare.com/')
-  assert.ok(status.token)
-  const [header, payload, signature] = status.token.split('.')
-  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString())
-  assert.equal(claims.sessionId, sessionId)
-  assert.equal(claims.audience, 'browser-worker')
-  assert.equal(
-    verify('RSA-SHA256', Buffer.from(`${header}.${payload}`), publicKey, Buffer.from(signature, 'base64url')),
-    true,
-  )
+  const sessionId = 'd0b43fa6-8006-4d95-8cdd-b13810875589'
+  const env: Record<string, string | undefined> = process.env
+  const values = {
+    NODE_ENV: 'development', WORKER_CONNECTION_MODE: 'local',
+    WORKER_SESSION_ID: sessionId, WORKER_LOCAL_WS_URL: `ws://127.0.0.1:${address.port}`,
+    WORKER_SESSION_PRIVATE_KEY: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+  }
+  const previous = Object.fromEntries(Object.keys(values).map((name) => [name, env[name]]))
+  try {
+    Object.assign(env, values)
+    const service = environmentServiceFromEnv()
+    assert.deepEqual(await service.create(), { sessionId })
+    const status = await service.status(sessionId)
+    assert.equal(status.state, 'ready')
+    assert.ok('token' in status && status.token)
+    const verifier = new SessionTokenVerifier({
+      sessionId, audience: 'browser-worker', maxTokenTtlSeconds: 300,
+      publicKeyPem: publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+    })
+    assert.ok(verifier.verifyAndConsume(status.token))
+    assert.equal(verifier.verifyAndConsume(status.token), null)
+    const next = await environmentServiceFromEnv().status(sessionId)
+    assert.ok('token' in next && next.token)
+    assert.ok(verifier.verifyAndConsume(next.token))
+  } finally {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) delete env[name]
+      else env[name] = value
+    }
+  }
 })
