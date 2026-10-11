@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { generateKeyPairSync, sign } from 'node:crypto'
 import test from 'node:test'
-import { SessionTokenVerifier, tokenFromProtocols } from '../security/session-auth.ts'
-import { parseCommand } from '../protocol.ts'
+import { SessionTokenVerifier, tokenFromProtocols } from '../adapters/security/session-auth.ts'
+import { parseCommand } from '../../shared/contracts/browser.ts'
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString()

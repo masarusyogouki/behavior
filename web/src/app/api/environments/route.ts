@@ -1,4 +1,5 @@
-import { EnvironmentConflictError, environmentServiceFromEnv } from '../../../server/environment-service'
+import { environmentServiceFromEnv } from '../../../server/environment-service'
+import { EnvironmentConflictError } from '../../../features/environments/domain/environment'
 import { isSameOriginMutation } from '../../../server/request-security'
 
 export const dynamic = 'force-dynamic'

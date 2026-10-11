@@ -1,0 +1,10 @@
+{
+  "name": "behavior",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:architecture": "node --experimental-strip-types --test tests/architecture.test.ts",
+    "test:contracts": "node --experimental-strip-types --test shared/contracts/*.test.ts",
+    "test": "npm run test:architecture && npm run test:contracts && pnpm --dir web test && pnpm --dir worker test"
+  }
+}

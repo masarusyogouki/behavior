@@ -15,10 +15,10 @@ pnpm dev
 
 ## Docker
 
-リポジトリの `web` ディレクトリでビルドします。ブラウザーで使う `NEXT_PUBLIC_WORKER_WS_URL` はビルド時に指定してください。HTTPS の画面には `wss://` の接続先が必要です。
+共有通信契約を含めるため、リポジトリルートでビルドします。ブラウザーで使う `NEXT_PUBLIC_WORKER_WS_URL` はビルド時に指定してください。HTTPS の画面には `wss://` の接続先が必要です。
 
 ```sh
-docker build --build-arg NEXT_PUBLIC_WORKER_WS_URL=ws://127.0.0.1:3000 -t behavior-web .
+docker build -f web/Dockerfile --build-arg NEXT_PUBLIC_WORKER_WS_URL=ws://127.0.0.1:3000 -t behavior-web .
 docker run --rm -p 3001:3001 behavior-web
 ```
 

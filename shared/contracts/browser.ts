@@ -39,6 +39,43 @@ export type WorkerMessage =
   | { type: 'element-selected'; element: ElementSnapshot }
   | { type: 'error'; message: string }
 
+// Untrusted messages cross this contract before they reach the React view.
+export function parseWorkerMessage(raw: string): WorkerMessage | null {
+  let value: unknown
+  try { value = JSON.parse(raw) } catch { return null }
+  if (!record(value)) return null
+  switch (value.type) {
+    case 'ready':
+      return typeof value.url === 'string' && typeof value.vncPath === 'string'
+        ? { type: 'ready', url: value.url, vncPath: value.vncPath }
+        : null
+    case 'url':
+      return typeof value.url === 'string' ? { type: 'url', url: value.url } : null
+    case 'error':
+      return typeof value.message === 'string' ? { type: 'error', message: value.message } : null
+    case 'element-selected':
+      return isElementSnapshot(value.element) ? { type: 'element-selected', element: value.element } : null
+    default:
+      return null
+  }
+}
+
+function isElementSnapshot(value: unknown): value is ElementSnapshot {
+  if (!record(value) || typeof value.tagName !== 'string' || typeof value.outerHTML !== 'string'
+    || typeof value.outerHTMLTruncated !== 'boolean' || typeof value.text !== 'string'
+    || !Array.isArray(value.attributes) || !Array.isArray(value.selectors) || !record(value.frame)) return false
+  const frame = value.frame
+  const selectorTypes: ElementSelector['type'][] = ['testId', 'id', 'role', 'label', 'placeholder', 'css']
+  return typeof frame.url === 'string' && (frame.name === null || typeof frame.name === 'string')
+    && typeof frame.isMainFrame === 'boolean'
+    && value.attributes.every((attribute: unknown) => record(attribute)
+      && typeof attribute.name === 'string' && typeof attribute.value === 'string')
+    && value.selectors.every((selector: unknown) => record(selector)
+      && selectorTypes.includes(selector.type as ElementSelector['type'])
+      && typeof selector.value === 'string' && typeof selector.playwright === 'string'
+      && typeof selector.unique === 'boolean')
+}
+
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

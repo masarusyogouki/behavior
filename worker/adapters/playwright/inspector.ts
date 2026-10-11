@@ -1,5 +1,5 @@
 import type { Frame } from 'playwright'
-import type { ElementSelector, ElementSnapshot } from '../protocol.ts'
+import type { ElementSelector, ElementSnapshot } from '../../../shared/contracts/browser.ts'
 
 type InspectorPayload = Omit<ElementSnapshot, 'frame'>
 
@@ -114,7 +114,7 @@ export function installElementInspector(bindingName: string): void {
           break
         }
       }
-      const parent = current.parentElement
+      const parent: Element | null = current.parentElement
       if (parent) {
         const siblings = Array.from(parent.children).filter((child) => child.tagName === current?.tagName)
         if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(current) + 1})`

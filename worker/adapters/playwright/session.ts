@@ -1,8 +1,9 @@
+import type { BrowserSession } from '../../application/ports.ts'
 import { chromium } from 'playwright'
 import { randomBytes } from 'node:crypto'
 import type { Browser, BrowserContext, Page } from 'playwright'
-import { config } from '../config.ts'
-import type { BrowserCommand, WorkerMessage } from '../protocol.ts'
+import { config } from '../../config.ts'
+import type { BrowserCommand, WorkerMessage } from '../../../shared/contracts/browser.ts'
 import { installElementInspector, normalizeElementSnapshot } from './inspector.ts'
 import { isBrowserUrlAllowed } from '../security/network-policy.ts'
 
@@ -12,7 +13,7 @@ type SessionOutput = {
   environment(): NodeJS.ProcessEnv
 }
 
-export class PlaywrightSession {
+export class PlaywrightSession implements BrowserSession {
   private readonly output: SessionOutput
   private browser?: Browser
   private context?: BrowserContext

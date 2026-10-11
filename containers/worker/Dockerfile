@@ -7,15 +7,15 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV LANG=C.UTF-8
 ENV HOME=/home/worker
 
-WORKDIR /app
+WORKDIR /app/worker
 
-COPY worker/package.json ./
+COPY --chmod=0644 worker/package.json worker/pnpm-lock.yaml ./
 
 # 依存の取得結果をビルド間で再利用する。
 RUN --mount=type=cache,target=/opt/pnpm/store \
     corepack enable \
     && corepack prepare pnpm@11.8.0 --activate \
-    && pnpm install --prod --no-frozen-lockfile --prefer-offline --store-dir /opt/pnpm/store
+    && pnpm install --prod --frozen-lockfile --prefer-offline --store-dir /opt/pnpm/store
 
 # 画面付き Chromium と VNC・日本語入力を用意する。headless shell は使わない。
 RUN --mount=type=cache,target=/opt/playwright-cache \
@@ -28,10 +28,10 @@ RUN --mount=type=cache,target=/opt/playwright-cache \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --chown=worker:worker worker/*.ts ./
-COPY --chown=worker:worker worker/playwright/ ./playwright/
-COPY --chown=worker:worker worker/security/ ./security/
-COPY --chown=worker:worker worker/vnc/ ./vnc/
-COPY containers/worker/fcitx5/profile /etc/xdg/fcitx5/profile
+COPY --chown=worker:worker worker/application/ ./application/
+COPY --chown=worker:worker worker/adapters/ ./adapters/
+COPY --chown=worker:worker shared/contracts/ /app/shared/contracts/
+COPY --chmod=0644 containers/worker/fcitx5/profile /etc/xdg/fcitx5/profile
 
 EXPOSE 3000
 USER 10001:10001

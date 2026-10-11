@@ -1,4 +1,4 @@
-﻿# behavior
+# behavior
 
 MagicPod のように、ブラウザ上でテストを作成・実行できるサービスを目指すプロジェクトです。
 
@@ -51,12 +51,12 @@ pnpm deploy:vinext
 
 | ファイル | 役割 |
 | --- | --- |
-| [`server.ts`](worker/server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
-| [`protocol.ts`](worker/protocol.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
-| [`playwright/session.ts`](worker/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
-| [`security/session-auth.ts`](worker/security/session-auth.ts) | セッションJWTの署名・claim・有効期限・再利用を検証する。 |
-| [`security/network-policy.ts`](worker/security/network-policy.ts) | localhost、プライベートIP、リンクローカル、メタデータ宛てなどのブラウザー通信を遮断する。 |
-| [`vnc/display.ts`](worker/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
+| [`adapters/websocket-server.ts`](worker/adapters/websocket-server.ts) | WebSocket の接続元確認、ping/pong による接続監視、操作の受信順制御、VNC の WebSocket 中継、切断時の終了処理。 |
+| [`shared/contracts/browser.ts`](shared/contracts/browser.ts) | UI から受け取る操作と Worker から返す通知の型を定義し、受信した操作の形式と座標範囲を検証する。 |
+| [`adapters/playwright/session.ts`](worker/adapters/playwright/session.ts) | 接続ごとに Chromium・コンテキスト・ページを作り、操作の実行、URL 変更の通知、終了処理を行う。 |
+| [`adapters/security/session-auth.ts`](worker/adapters/security/session-auth.ts) | セッションJWTの署名・claim・有効期限・再利用を検証する。 |
+| [`adapters/security/network-policy.ts`](worker/adapters/security/network-policy.ts) | localhost、プライベートIP、リンクローカル、メタデータ宛てなどのブラウザー通信を遮断する。 |
+| [`adapters/vnc/display.ts`](worker/adapters/vnc/display.ts) | 接続ごとに Xvfb と x11vnc を起動・終了する。 |
 | [`config.ts`](worker/config.ts) | 許可する Origin、初期 URL などの設定を読み取り、値を検証する。 |
 
 画面は x11vnc → Worker の `/vnc/<一時トークン>` → noVNC の順で送ります。画面内の Chromium のタブやアドレスバー、Fcitx5/Anthy の変換候補は VNC 経由で操作・表示します。画面ごとに D-Bus と Fcitx5 を起動し、切断時に終了します。トークンは操作 WebSocket の接続ごとに発行し、切断時に破棄します。
@@ -87,3 +87,28 @@ pnpm dev
 ```
 
 JWT発行APIと画面の接続が完了するまでは、`http://localhost:3001` の画面表示のみ確認できます。認証を含むWorker接続は `worker/test` の自動テストとコンテナ統合テストで確認します。
+
+## アーキテクチャ
+
+環境管理とWorkerのセッション制御には、機能単位のモジュールとヘキサゴナルアーキテクチャを採用しています。候補・採用理由・依存方向は [設計メモ](memo/0004-use-hexagonal-architecture.md) を参照してください。
+
+Webの `features/environments/application` は環境操作のポートを利用し、GitHub ActionsやJWTの実装は `adapters` に置きます。Workerの `application` はブラウザーと画面のポートを利用し、Playwright・VNC・WebSocket・認証は `adapters` に置きます。`server` と `composition` が実行時に組み立てます。UIの接続管理は `features/remote-session/use-remote-session.ts`、通信契約は `shared/contracts` にまとめています。
+
+Node.js 24で、ルートから以下を実行すると、依存方向・共有契約・Web・Workerのテストを確認できます。
+
+```sh
+pnpm --dir web install --frozen-lockfile
+pnpm --dir worker install --frozen-lockfile
+npm test
+pnpm --dir web typecheck
+pnpm --dir worker typecheck
+pnpm --dir web lint
+pnpm --dir web build
+pnpm --dir web build:vinext
+```
+
+WebのDockerビルドも共有契約を含めるため、リポジトリルートをcontextにします。
+
+```sh
+docker build -f web/Dockerfile -t behavior-web .
+```

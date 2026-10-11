@@ -1,7 +1,5 @@
-import {
-  EnvironmentNotFoundError,
-  environmentServiceFromEnv,
-} from '../../../../server/environment-service'
+import { environmentServiceFromEnv } from '../../../../server/environment-service'
+import { EnvironmentNotFoundError } from '../../../../features/environments/domain/environment'
 import { isSameOriginMutation } from '../../../../server/request-security'
 
 export const dynamic = 'force-dynamic'

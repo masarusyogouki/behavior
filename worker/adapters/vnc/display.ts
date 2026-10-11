@@ -1,10 +1,11 @@
+import type { DisplaySession } from '../../application/ports.ts'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
 import { access, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { config } from '../config.ts'
+import { config } from '../../config.ts'
 
 const execFileAsync = promisify(execFile)
 // 接続ごとに別の X display と VNC ポートを割り当てる。
@@ -32,7 +33,7 @@ function portOpen(port: number): Promise<boolean> {
   })
 }
 
-export class VncDisplay {
+export class VncDisplay implements DisplaySession {
   readonly display = nextDisplay++
   readonly port = 5900 + this.display
   private dbusPid?: number
