@@ -161,15 +161,6 @@ export function useRemoteSession() {
     setStatus('connecting')
     setNotice('')
 
-    const localDevelopment = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-    const directWorkerUrl = localDevelopment
-      ? process.env.NEXT_PUBLIC_WORKER_WS_URL || 'ws://127.0.0.1:3000'
-      : ''
-    if (directWorkerUrl) {
-      connectWorker(directWorkerUrl)
-      return
-    }
-
     const controller = new AbortController()
     pollAbortRef.current = controller
     try {

@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.8.0",
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "next dev -H 127.0.0.1 -p 3001",
     "build": "next build",
     "lint": "oxlint",
     "test": "node --experimental-strip-types --test src/server/*.test.ts src/features/environments/application/*.test.ts src/features/environments/adapters/*.test.ts",
