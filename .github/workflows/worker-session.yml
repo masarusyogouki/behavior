@@ -83,7 +83,6 @@ jobs:
           --name browser-worker
           --network behavior-browser
           --init
-          --publish 127.0.0.1:3000:3000
           --read-only
           --cap-drop ALL
           --security-opt no-new-privileges
@@ -102,8 +101,10 @@ jobs:
       - name: Check Worker health
         shell: bash
         run: |
+          # Internal-only networks do not publish ports on the Docker host.
+          # Probe from a peer to also verify the origin's Docker DNS and routing.
           for attempt in {1..60}; do
-            if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
+            if docker exec browser-egress node -e "fetch('http://browser-worker:3000/health', { signal: AbortSignal.timeout(2000) }).then(r => { if (!r.ok) process.exit(1) }).catch(e => { console.error(e.message); process.exit(1) })"; then
               echo
               echo "Worker is healthy."
               exit 0
@@ -124,16 +125,16 @@ jobs:
 
       - name: Start Cloudflare Quick Tunnel
         shell: bash
-        run: >-
-          docker run --detach
-          --name cloudflared
-          --network host
-          --read-only
-          --cap-drop ALL
-          --security-opt no-new-privileges
-          --tmpfs /tmp:rw,nosuid,nodev,size=64m
-          cloudflare/cloudflared:2026.9.3
-          tunnel --no-autoupdate --url http://127.0.0.1:3000 --loglevel info
+        run: |
+          # Only the tunnel joins the outbound network; the Worker stays isolated.
+          docker network create behavior-tunnel
+          docker create --name cloudflared --network behavior-tunnel \
+            --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --tmpfs /tmp:rw,nosuid,nodev,size=64m \
+            cloudflare/cloudflared:2026.9.3 \
+            tunnel --no-autoupdate --url http://browser-worker:3000 --loglevel info
+          docker network connect behavior-browser cloudflared
+          docker start cloudflared
 
       - name: Check Quick Tunnel health
         id: quick-tunnel
@@ -210,6 +211,7 @@ jobs:
           echo "=== cloudflared logs ==="
           docker logs cloudflared 2>&1 || true
           docker logs browser-egress 2>&1 || true
+          docker inspect --format '{{json .State}} {{json .NetworkSettings.Networks}}' browser-worker 2>&1 || true
 
       - name: Remove session containers
         if: always()
@@ -219,3 +221,4 @@ jobs:
           docker rm --force browser-worker 2>/dev/null || true
           docker rm --force browser-egress 2>/dev/null || true
           docker network rm behavior-browser 2>/dev/null || true
+          docker network rm behavior-tunnel 2>/dev/null || true
